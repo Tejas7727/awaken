@@ -2,9 +2,12 @@ import { useEffect } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './lib/store';
+import { isSupabaseConfigured } from './lib/supabase';
 import AppShell from './components/layout/AppShell';
 import LevelUpModal from './components/LevelUpModal';
 import SyncBanner from './components/SyncBanner';
+import ColdOpen from './components/intro/ColdOpen';
+import Migrate from './pages/Migrate';
 import Home from './pages/Home';
 import Quests from './pages/Quests';
 import Stats from './pages/Stats';
@@ -48,21 +51,17 @@ function AnimatedRoutes() {
   );
 }
 
-export default function App() {
-  const init = useStore((s) => s.init);
+function Dashboard() {
   const runRolloverCheck = useStore((s) => s.runRolloverCheck);
   const toast = useStore((s) => s.toast);
   const dismissToast = useStore((s) => s.dismissToast);
   const pushToGist = useStore((s) => s.pushToGist);
-
-  useEffect(() => { init(); }, [init]);
 
   useEffect(() => {
     const id = setInterval(() => { runRolloverCheck(); }, 60_000);
     return () => clearInterval(id);
   }, [runRolloverCheck]);
 
-  // Best-effort push on page close
   useEffect(() => {
     const handler = () => { pushToGist(); };
     window.addEventListener('beforeunload', handler);
@@ -93,4 +92,39 @@ export default function App() {
       )}
     </div>
   );
+}
+
+export default function App() {
+  const initAuth = useStore((s) => s.initAuth);
+  const init = useStore((s) => s.init);
+  const authLoading = useStore((s) => s.authLoading);
+  const authSession = useStore((s) => s.authSession);
+  const isLegacyUser = useStore((s) => s.isLegacyUser);
+
+  useEffect(() => {
+    if (isSupabaseConfigured) {
+      initAuth();
+    } else {
+      // Local-only mode (Supabase not configured) — skip auth gate
+      init();
+    }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // While checking session — black screen
+  if (isSupabaseConfigured && authLoading) {
+    return <div className="fixed inset-0" style={{ backgroundColor: '#07090E' }} />;
+  }
+
+  // No session → cold open + login
+  if (isSupabaseConfigured && !authSession) {
+    return <ColdOpen />;
+  }
+
+  // Legacy local user who needs to create a cloud account
+  if (isLegacyUser) {
+    return <Migrate />;
+  }
+
+  // Authenticated (or Supabase not configured) → dashboard
+  return <Dashboard />;
 }

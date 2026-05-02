@@ -53,6 +53,7 @@ export default defineConfig({
           'vendor-motion':  ['framer-motion'],
           'vendor-db':      ['dexie', 'zustand', 'zod', 'nanoid'],
           'vendor-sync':    ['@octokit/rest'],
+          'vendor-auth':    ['@supabase/supabase-js'],
         },
       },
     },

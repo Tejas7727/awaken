@@ -7,6 +7,8 @@ import '@fontsource/inter/400.css';
 import '@fontsource/inter/500.css';
 import '@fontsource/space-grotesk/400.css';
 import '@fontsource/space-grotesk/500.css';
+import '@fontsource/cinzel/400.css';
+import '@fontsource/cinzel/500.css';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

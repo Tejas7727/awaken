@@ -14,6 +14,7 @@ export interface UserStateRow {
   lastActiveDay: string | null;
   currentChapter: number;
   earnedTitleIds: string[];
+  cloudUserId?: string; // set after Supabase account is linked/created
 }
 
 export interface SettingsRow {

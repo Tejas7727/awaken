@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { Session } from '@supabase/supabase-js';
 import { db } from './db';
 import { seedIfEmpty } from './seed';
 import { computeRank, computePlayerLevel, statXpToLevel } from './progression';
@@ -7,6 +8,7 @@ import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type S
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
 import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, type GistSnapshot } from './github';
+import { supabase, isSupabaseConfigured, playerEmail } from './supabase';
 
 const LLM_PROMPT = `You are the Awaken Quest Master. The player has shared their state. Generate the next set of quests so that:
 - They match the player's current rank and stats — do not propose impossible quests for an E-rank.
@@ -65,6 +67,17 @@ interface AwakenState {
   syncBanner: string | null;
   lastSyncedAt: string | null;
 
+  // Auth state
+  authSession: Session | null;
+  authLoading: boolean;
+  isLegacyUser: boolean; // has local IndexedDB data but no cloudUserId
+
+  initAuth: () => Promise<void>;
+  signIn: (playerName: string, password: string) => Promise<string | null>;
+  signUp: (playerName: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
+  migrateLocalData: (playerName: string, password: string) => Promise<string | null>;
+
   init: () => Promise<void>;
   completeQuest: (questId: string) => Promise<void>;
   runRolloverCheck: () => Promise<void>;
@@ -108,6 +121,9 @@ export const useStore = create<AwakenState>((set, get) => ({
   syncStatus: 'idle',
   syncBanner: null,
   lastSyncedAt: null,
+  authSession: null,
+  authLoading: true,
+  isLegacyUser: false,
 
   showToast: (msg) => {
     set({ toast: msg });
@@ -518,6 +534,173 @@ export const useStore = create<AwakenState>((set, get) => ({
   },
 
   dismissLevelUp: () => set({ levelUpData: null }),
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
+
+  initAuth: async () => {
+    if (!isSupabaseConfigured) {
+      // Dev/local mode without Supabase — treat as authenticated locally
+      set({ authLoading: false, authSession: null });
+      return;
+    }
+
+    // Subscribe to auth changes (session refresh, sign-out)
+    supabase.auth.onAuthStateChange((_event, session) => {
+      set({ authSession: session });
+      if (!session) {
+        set({
+          user: null, settings: null, quests: [], completions: [],
+          stories: [], titles: [], todayCompletedIds: new Set(),
+          statHistory: [], loading: true, isLegacyUser: false,
+        });
+      }
+    });
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      set({ authLoading: false, authSession: null });
+      return;
+    }
+
+    set({ authSession: session });
+
+    // Detect legacy local-only user (has data but never linked to cloud)
+    const localUser = await db.user.get('me');
+    if (localUser && !localUser.cloudUserId) {
+      set({ authLoading: false, isLegacyUser: true });
+      // Still load local state so Migrate page can display their name
+      await get().init();
+      return;
+    }
+
+    await get().init();
+    set({ authLoading: false });
+  },
+
+  signIn: async (playerName: string, password: string): Promise<string | null> => {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: playerEmail(playerName),
+      password,
+    });
+    if (error) return error.message;
+    if (!data.session) return 'Sign-in failed — try again';
+
+    set({ authSession: data.session });
+
+    // Seed local DB if this is a new device (no local data)
+    const localUser = await db.user.get('me');
+    if (!localUser) {
+      await seedIfEmpty();
+      // Mark cloudUserId
+      const row = await db.user.get('me');
+      if (row) await db.user.put({ ...row, cloudUserId: data.user.id });
+    } else if (!localUser.cloudUserId) {
+      // Legacy user who signed in — route to migration
+      set({ authLoading: false, isLegacyUser: true });
+      await get().init();
+      return null;
+    }
+
+    await get().init();
+    set({ authLoading: false });
+    return null;
+  },
+
+  signUp: async (playerName: string, password: string): Promise<string | null> => {
+    const { data, error } = await supabase.auth.signUp({
+      email: playerEmail(playerName),
+      password,
+    });
+    if (error) {
+      if (error.message.toLowerCase().includes('already registered')) {
+        return 'That name is taken — choose another.';
+      }
+      return error.message;
+    }
+    if (!data.session) return 'Account created — check your email to confirm, then sign in.';
+
+    // Create the profile row
+    const { data: rpc, error: rpcErr } = await supabase.rpc('create_profile', {
+      p_player_name: playerName,
+    });
+    if (rpcErr) return rpcErr.message;
+    // I/O boundary — RPC returns JSON
+    const result = rpc as { error?: string; message?: string };
+    if (result?.error) return result.message ?? 'Profile creation failed';
+
+    set({ authSession: data.session });
+    await seedIfEmpty();
+    const row = await db.user.get('me');
+    if (row) await db.user.put({ ...row, name: playerName, cloudUserId: data.user!.id });
+    await get().init();
+    set({ authLoading: false });
+    return null;
+  },
+
+  signOut: async () => {
+    await supabase.auth.signOut();
+    // State reset handled by onAuthStateChange subscription
+  },
+
+  migrateLocalData: async (playerName: string, password: string): Promise<string | null> => {
+    const { user, completions } = get();
+
+    // Sign up with the local player's data
+    const { data, error } = await supabase.auth.signUp({
+      email: playerEmail(playerName),
+      password,
+    });
+    if (error) {
+      if (error.message.toLowerCase().includes('already registered')) {
+        return 'That name is taken — choose another.';
+      }
+      return error.message;
+    }
+    if (!data.session) return 'Account created — check your email to confirm, then sign in.';
+
+    // Create profile with existing local state
+    const { data: rpc, error: rpcErr } = await supabase.rpc('create_profile', {
+      p_player_name: playerName,
+      p_rank: user?.rank ?? 'F',
+      p_player_level: user?.playerLevel ?? 1,
+      p_total_xp: user?.totalXp ?? 0,
+      p_stats: user?.stats ?? {},
+      p_stat_xp: user?.statXp ?? {},
+      p_streak: user?.streak ?? 0,
+      p_last_active_day: user?.lastActiveDay ?? null,
+      p_current_chapter: user?.currentChapter ?? 1,
+    });
+    if (rpcErr) return rpcErr.message;
+    const result = rpc as { error?: string; message?: string };
+    if (result?.error) return result.message ?? 'Profile creation failed';
+
+    // Push completions to Supabase
+    if (completions.length > 0) {
+      const rows = completions.map((c) => ({
+        user_id: data.user!.id,
+        quest_id: c.questId,
+        effective_day: c.effectiveDay,
+        completed_at: c.completedAt,
+        xp_awarded: c.xpAwarded,
+        stats_awarded: c.statsAwarded,
+      }));
+      // Insert in batches of 200
+      for (let i = 0; i < rows.length; i += 200) {
+        await supabase.from('completions').insert(rows.slice(i, i + 200));
+      }
+    }
+
+    // Mark local user as migrated
+    const localUser = await db.user.get('me');
+    if (localUser) {
+      await db.user.put({ ...localUser, name: playerName, cloudUserId: data.user!.id });
+    }
+
+    set({ authSession: data.session, isLegacyUser: false });
+    await get().init();
+    set({ authLoading: false });
+    return null;
+  },
 
   dismissSyncBanner: () => set({ syncBanner: null }),
 

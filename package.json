@@ -9,9 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/cinzel": "^5.2.8",
     "@fontsource/inter": "^5.1.0",
     "@fontsource/space-grotesk": "^5.1.0",
     "@octokit/rest": "^22.0.1",
+    "@supabase/supabase-js": "^2.105.1",
     "date-fns": "^4.1.0",
     "dexie": "^4.0.8",
     "framer-motion": "^11.11.0",

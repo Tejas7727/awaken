@@ -8,7 +8,7 @@ import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type S
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
 import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, type GistSnapshot } from './github';
-import { supabase, isSupabaseConfigured, playerEmail } from './supabase';
+import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError } from './supabase';
 
 const LLM_PROMPT = `You are the Awaken Quest Master. The player has shared their state. Generate the next set of quests so that:
 - They match the player's current rank and stats — do not propose impossible quests for an E-rank.
@@ -582,7 +582,7 @@ export const useStore = create<AwakenState>((set, get) => ({
       email: playerEmail(playerName),
       password,
     });
-    if (error) return error.message;
+    if (error) return cleanAuthError(error.message);
     if (!data.session) return 'Sign-in failed — try again';
 
     set({ authSession: data.session });
@@ -615,7 +615,7 @@ export const useStore = create<AwakenState>((set, get) => ({
       if (error.message.toLowerCase().includes('already registered')) {
         return 'That name is taken — choose another.';
       }
-      return error.message;
+      return cleanAuthError(error.message);
     }
     if (!data.session) return 'Account created — check your email to confirm, then sign in.';
 
@@ -654,7 +654,7 @@ export const useStore = create<AwakenState>((set, get) => ({
       if (error.message.toLowerCase().includes('already registered')) {
         return 'That name is taken — choose another.';
       }
-      return error.message;
+      return cleanAuthError(error.message);
     }
     if (!data.session) return 'Account created — check your email to confirm, then sign in.';
 

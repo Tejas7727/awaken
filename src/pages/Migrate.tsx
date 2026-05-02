@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../lib/store';
+import { cleanAuthError } from '../lib/supabase';
 
 const NAME_RE = /^[a-zA-Z0-9_-]{3,20}$/;
 
@@ -26,8 +27,9 @@ export default function Migrate() {
     const err = await migrateLocalData(name.trim(), password);
     setLoading(false);
     if (err) {
-      if (err.toLowerCase().includes('name') || err.toLowerCase().includes('user')) setNameErr(err);
-      else setPassErr(err);
+      const clean = cleanAuthError(err);
+      if (clean.toLowerCase().includes('password')) setPassErr(clean);
+      else setNameErr(clean);
     } else {
       setDone(true);
     }

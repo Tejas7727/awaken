@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../../lib/store';
+import { cleanAuthError } from '../../lib/supabase';
 
 type Mode = 'signin' | 'signup';
 
@@ -47,8 +48,10 @@ export default function LoginFrame() {
       : await signUp(name.trim(), password);
     setLoading(false);
     if (err) {
-      if (err.toLowerCase().includes('name') || err.toLowerCase().includes('user')) setNameErr(err);
-      else setPassErr(err);
+      const clean = cleanAuthError(err);
+      // Password-specific errors go under password; everything else under player name
+      if (clean.toLowerCase().includes('password')) setPassErr(clean);
+      else setNameErr(clean);
     }
   };
 

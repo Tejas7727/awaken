@@ -52,6 +52,7 @@ export default defineConfig({
           'vendor-charts':  ['recharts'],
           'vendor-motion':  ['framer-motion'],
           'vendor-db':      ['dexie', 'zustand', 'zod', 'nanoid'],
+          'vendor-sync':    ['@octokit/rest'],
         },
       },
     },

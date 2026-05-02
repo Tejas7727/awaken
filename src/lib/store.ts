@@ -6,6 +6,7 @@ import { getEffectiveDay } from './time';
 import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type StoryNode, type Title, type UserState } from './schemas';
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
+import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, type GistSnapshot } from './github';
 
 const LLM_PROMPT = `You are the Awaken Quest Master. The player has shared their state. Generate the next set of quests so that:
 - They match the player's current rank and stats — do not propose impossible quests for an E-rank.
@@ -60,6 +61,10 @@ interface AwakenState {
 
   statHistory: Array<{ day: string; stat: string; value: number }>;
 
+  syncStatus: 'idle' | 'syncing' | 'error';
+  syncBanner: string | null;
+  lastSyncedAt: string | null;
+
   init: () => Promise<void>;
   completeQuest: (questId: string) => Promise<void>;
   runRolloverCheck: () => Promise<void>;
@@ -74,7 +79,16 @@ interface AwakenState {
   dismissLevelUp: () => void;
   showToast: (msg: string) => void;
   dismissToast: () => void;
+
+  connectGist: (token: string) => Promise<void>;
+  pushToGist: () => Promise<void>;
+  pullCheckOnLaunch: () => Promise<void>;
+  applyGistSnapshot: (snapshot: GistSnapshot) => Promise<void>;
+  dismissSyncBanner: () => void;
 }
+
+// Module-level debounce timer for gist sync
+let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useStore = create<AwakenState>((set, get) => ({
   user: null,
@@ -91,6 +105,9 @@ export const useStore = create<AwakenState>((set, get) => ({
   importPreview: null,
   importError: null,
   importJson: '',
+  syncStatus: 'idle',
+  syncBanner: null,
+  lastSyncedAt: null,
 
   showToast: (msg) => {
     set({ toast: msg });
@@ -100,7 +117,7 @@ export const useStore = create<AwakenState>((set, get) => ({
 
   init: async () => {
     await seedIfEmpty();
-    const [userRow, settingsRow, quests, completions, stories, titles, statHistory] = await Promise.all([
+    const [userRow, settingsRow, quests, completions, stories, titles, statHistory, syncLog] = await Promise.all([
       db.user.get('me'),
       db.settings.get('settings'),
       db.quests.toArray(),
@@ -108,6 +125,7 @@ export const useStore = create<AwakenState>((set, get) => ({
       db.stories.toArray(),
       db.titles.toArray(),
       db.stats_daily.toArray(),
+      db.syncLog.get('sync'),
     ]);
 
     if (!userRow || !settingsRow) {
@@ -124,8 +142,14 @@ export const useStore = create<AwakenState>((set, get) => ({
       completions.filter((c) => c.effectiveDay === today).map((c) => c.questId)
     );
 
-    set({ user, settings, quests, completions, stories, titles, statHistory, todayCompletedIds, loading: false });
+    set({
+      user, settings, quests, completions, stories, titles, statHistory, todayCompletedIds,
+      loading: false,
+      lastSyncedAt: syncLog?.syncedAt ?? null,
+    });
     await get().runRolloverCheck();
+    // Non-blocking: check if cloud has newer data
+    get().pullCheckOnLaunch();
   },
 
   completeQuest: async (questId: string) => {
@@ -235,6 +259,10 @@ export const useStore = create<AwakenState>((set, get) => ({
       statHistory: statHistory2,
       levelUpData: didLevelUp ? { level: newPlayerLevel, rank: newRank } : get().levelUpData,
     });
+
+    // Debounced gist push — 30 s after last completion
+    if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(() => { get().pushToGist(); }, 30_000);
   },
 
   runRolloverCheck: async () => {
@@ -490,4 +518,159 @@ export const useStore = create<AwakenState>((set, get) => ({
   },
 
   dismissLevelUp: () => set({ levelUpData: null }),
+
+  dismissSyncBanner: () => set({ syncBanner: null }),
+
+  connectGist: async (token: string) => {
+    set({ syncStatus: 'syncing' });
+    try {
+      await get().updateSettings({ githubToken: token });
+      let gistId = await findExistingGist(token);
+      if (gistId) {
+        await get().updateSettings({ gistId });
+        const result = await fetchGist(token, gistId);
+        if (result) {
+          const syncLog = await db.syncLog.get('sync');
+          const localAt = syncLog?.syncedAt ?? null;
+          if (!localAt || result.updatedAt > localAt) {
+            set({ syncBanner: 'Cloud data found — load it to sync your progress?', syncStatus: 'idle' });
+          } else {
+            // Local is up-to-date; push local state
+            const snapshot = await buildSnapshot(token);
+            await updateGist(token, gistId, snapshot);
+            await db.syncLog.put({ id: 'sync', syncedAt: new Date().toISOString() });
+            set({ lastSyncedAt: new Date().toISOString(), syncStatus: 'idle' });
+            get().showToast('Gist linked and synced');
+          }
+        }
+      } else {
+        // No existing gist — create one with current state
+        const snapshot = await buildSnapshot(token);
+        gistId = await createGist(token, snapshot);
+        await get().updateSettings({ gistId });
+        await db.syncLog.put({ id: 'sync', syncedAt: new Date().toISOString() });
+        set({ lastSyncedAt: new Date().toISOString(), syncStatus: 'idle' });
+        get().showToast('Gist created — sync active');
+      }
+    } catch (err) {
+      console.error('connectGist error:', err);
+      set({ syncStatus: 'error' });
+      get().showToast('Sync failed — check your PAT and try again');
+    }
+  },
+
+  pushToGist: async () => {
+    const { settings } = get();
+    if (!settings?.githubToken || !settings?.gistId) return;
+    set({ syncStatus: 'syncing' });
+    try {
+      const snapshot = await buildSnapshot(settings.githubToken);
+      await updateGist(settings.githubToken, settings.gistId, snapshot);
+      const now = new Date().toISOString();
+      await db.syncLog.put({ id: 'sync', syncedAt: now });
+      set({ lastSyncedAt: now, syncStatus: 'idle' });
+    } catch (err) {
+      console.error('pushToGist error:', err);
+      set({ syncStatus: 'error' });
+    }
+  },
+
+  pullCheckOnLaunch: async () => {
+    const { settings } = get();
+    if (!settings?.githubToken || !settings?.gistId) return;
+    try {
+      const result = await fetchGist(settings.githubToken, settings.gistId);
+      if (!result) return;
+      const syncLog = await db.syncLog.get('sync');
+      const localAt = syncLog?.syncedAt ?? null;
+      if (!localAt || result.updatedAt > localAt) {
+        set({ syncBanner: 'Newer data on cloud — review and merge?' });
+      }
+    } catch {
+      // Silently skip — offline or token issue; don't block the app
+    }
+  },
+
+  applyGistSnapshot: async (snapshot: GistSnapshot) => {
+    set({ syncStatus: 'syncing' });
+    try {
+      // Merge completions: union by id (append-only)
+      const localCompletions = await db.completions.toArray();
+      const localIds = new Set(localCompletions.map((c) => c.id));
+      const newCompletions = snapshot.completions.filter((c) => !localIds.has(c.id));
+      if (newCompletions.length) await db.completions.bulkPut(newCompletions);
+
+      // Merge quests: gist wins for same id; add new ones
+      await db.quests.bulkPut(snapshot.quests);
+
+      // Merge stories: take whichever has unlockedAt set
+      const localStories = await db.stories.toArray();
+      const localStoryMap = new Map(localStories.map((s) => [s.id, s]));
+      for (const node of snapshot.stories) {
+        const local = localStoryMap.get(node.id);
+        if (!local || (!local.unlockedAt && node.unlockedAt)) {
+          await db.stories.put(node);
+        }
+      }
+
+      // Merge titles: take whichever has earnedAt set
+      const localTitles = await db.titles.toArray();
+      const localTitleMap = new Map(localTitles.map((t) => [t.id, t]));
+      for (const title of snapshot.titles) {
+        const local = localTitleMap.get(title.id);
+        if (!local || (!local.earnedAt && title.earnedAt)) {
+          await db.titles.put(title);
+        }
+      }
+
+      // Merge stats_daily: gist wins (take whichever value is higher)
+      for (const row of snapshot.stats_daily) {
+        const existing = await db.stats_daily.get([row.day, row.stat]);
+        if (!existing || row.value > existing.value) {
+          await db.stats_daily.put(row);
+        }
+      }
+
+      // User: take the one with more totalXp (more progress)
+      const localUser = await db.user.get('me');
+      if (!localUser || snapshot.user.totalXp > localUser.totalXp) {
+        await db.user.put(snapshot.user);
+      }
+
+      const now = new Date().toISOString();
+      await db.syncLog.put({ id: 'sync', syncedAt: now });
+
+      // Reload everything into store state
+      const [userRow, quests, completions, stories, titles, statHistory] = await Promise.all([
+        db.user.get('me'),
+        db.quests.toArray(),
+        db.completions.toArray(),
+        db.stories.toArray(),
+        db.titles.toArray(),
+        db.stats_daily.toArray(),
+      ]);
+      const { settings } = get();
+      const rolloverHour = settings?.rolloverHour ?? 4;
+      const today = getEffectiveDay(new Date(), rolloverHour);
+      const todayCompletedIds = new Set(completions.filter((c) => c.effectiveDay === today).map((c) => c.questId));
+
+      set({
+        user: userRow as unknown as UserState,
+        quests,
+        completions,
+        stories,
+        titles,
+        statHistory,
+        todayCompletedIds,
+        syncBanner: null,
+        lastSyncedAt: now,
+        syncStatus: 'idle',
+      });
+      get().showToast('Cloud data merged');
+    } catch (err) {
+      console.error('applyGistSnapshot error:', err);
+      set({ syncStatus: 'error' });
+      get().showToast('Merge failed — try again');
+    }
+  },
 }));

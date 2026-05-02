@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './lib/store';
 import AppShell from './components/layout/AppShell';
 import LevelUpModal from './components/LevelUpModal';
+import SyncBanner from './components/SyncBanner';
 import Home from './pages/Home';
 import Quests from './pages/Quests';
 import Stats from './pages/Stats';
@@ -52,6 +53,7 @@ export default function App() {
   const runRolloverCheck = useStore((s) => s.runRolloverCheck);
   const toast = useStore((s) => s.toast);
   const dismissToast = useStore((s) => s.dismissToast);
+  const pushToGist = useStore((s) => s.pushToGist);
 
   useEffect(() => { init(); }, [init]);
 
@@ -60,6 +62,13 @@ export default function App() {
     return () => clearInterval(id);
   }, [runRolloverCheck]);
 
+  // Best-effort push on page close
+  useEffect(() => {
+    const handler = () => { pushToGist(); };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [pushToGist]);
+
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
       <AppShell>
@@ -67,6 +76,7 @@ export default function App() {
       </AppShell>
 
       <LevelUpModal />
+      <SyncBanner />
 
       {toast && (
         <div

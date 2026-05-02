@@ -10,6 +10,11 @@ export default function Settings() {
   const updateSettings = useStore((s) => s.updateSettings);
   const resetAllData = useStore((s) => s.resetAllData);
 
+  const connectGist = useStore((s) => s.connectGist);
+  const pushToGist = useStore((s) => s.pushToGist);
+  const syncStatus = useStore((s) => s.syncStatus);
+  const lastSyncedAt = useStore((s) => s.lastSyncedAt);
+
   const [confirmReset, setConfirmReset] = useState(false);
   const [showPat, setShowPat] = useState(false);
   const [patInput, setPatInput] = useState('');
@@ -29,17 +34,22 @@ export default function Settings() {
     updateSettings({ focusAreas: next });
   };
 
-  const handleSavePat = () => {
-    if (patInput.trim()) {
-      updateSettings({ githubToken: patInput.trim() });
-      setPatInput('');
-      setShowPat(false);
-    }
+  const handleSavePat = async () => {
+    if (!patInput.trim()) return;
+    await connectGist(patInput.trim());
+    setPatInput('');
+    setShowPat(false);
   };
 
   const handleRevokePat = () => {
     updateSettings({ githubToken: undefined, gistId: undefined });
   };
+
+  const syncLabel = syncStatus === 'syncing'
+    ? 'Syncing…'
+    : lastSyncedAt
+    ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}`
+    : 'Not yet synced';
 
   return (
     <div>
@@ -135,17 +145,39 @@ export default function Settings() {
         style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
       >
         {settings.githubToken ? (
-          <div className="flex items-center justify-between">
-            <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              PAT saved {settings.gistId ? '· gist linked' : '· no gist yet'}
-            </span>
-            <button
-              onClick={handleRevokePat}
-              className="text-xs px-3 py-1 rounded-lg"
-              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-magenta)', border: '1px solid var(--border-subtle)' }}
-            >
-              Revoke and clear
-            </button>
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                {settings.gistId ? 'Gist linked' : 'PAT saved — no gist yet'}
+              </span>
+              <span
+                className="text-xs"
+                style={{ color: syncStatus === 'error' ? 'var(--accent-magenta)' : 'var(--text-tertiary)' }}
+              >
+                {syncStatus === 'error' ? 'Sync error' : syncLabel}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => pushToGist()}
+                disabled={syncStatus === 'syncing'}
+                className="flex-1 py-1.5 rounded-lg text-sm font-medium"
+                style={{
+                  backgroundColor: 'var(--bg-elevated)',
+                  color: syncStatus === 'syncing' ? 'var(--text-tertiary)' : 'var(--accent-cyan)',
+                  border: '1px solid var(--border-subtle)',
+                }}
+              >
+                {syncStatus === 'syncing' ? 'Syncing…' : 'Sync now'}
+              </button>
+              <button
+                onClick={handleRevokePat}
+                className="flex-1 py-1.5 rounded-lg text-sm"
+                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-magenta)', border: '1px solid var(--border-subtle)' }}
+              >
+                Revoke and clear
+              </button>
+            </div>
           </div>
         ) : showPat ? (
           <div className="flex flex-col gap-2">

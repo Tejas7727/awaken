@@ -1,18 +1,20 @@
 import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { useStore } from '../lib/store';
+import { V } from '../lib/voice';
 import StatGrid from '../components/stats/StatGrid';
 import XPBar from '../components/stats/XPBar';
 import { getEffectiveDay } from '../lib/time';
 import type { StatKey } from '../lib/schemas';
 
+// Match the new earth-tone stat palette from tokens.css
 const STAT_COLORS: Record<StatKey, string> = {
-  STR: '#FF8C6B',
-  AGI: '#4DE9C5',
-  VIT: '#6BFF8C',
-  INT: '#6B8CFF',
-  WIS: '#B86BFF',
-  CHA: '#FF6BB8',
+  STR: '#C9663C',
+  AGI: '#8FA68A',
+  VIT: '#B8A05B',
+  INT: '#6B7FA0',
+  WIS: '#9D7BA8',
+  CHA: '#C49080',
 };
 const STAT_KEYS: StatKey[] = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA'];
 
@@ -25,18 +27,15 @@ export default function Stats() {
 
   const rolloverHour = settings?.rolloverHour ?? 4;
 
-  // Build last-30-days line chart data — one point per day per stat
   const chartData = useMemo(() => {
     const days = Array.from({ length: 30 }, (_, i) =>
       getEffectiveDay(new Date(Date.now() - (29 - i) * 86400000), rolloverHour)
     );
-    // Build a map: day → stat → value
     const map: Record<string, Record<string, number>> = {};
     for (const row of statHistory) {
       if (!map[row.day]) map[row.day] = {};
       map[row.day][row.stat] = row.value;
     }
-    // Forward-fill from last known value
     const lastKnown: Record<string, number> = {};
     if (user) {
       for (const k of STAT_KEYS) lastKnown[k] = user.stats[k] ?? 1;
@@ -53,7 +52,6 @@ export default function Stats() {
     });
   }, [statHistory, rolloverHour, user]);
 
-  // Tag contribution bar chart
   const tagData = useMemo(() => {
     const counts: Record<string, number> = {};
     for (const c of completions) {
@@ -74,8 +72,11 @@ export default function Stats() {
 
   return (
     <div>
-      <h1 className="text-lg font-medium font-display mb-4" style={{ color: 'var(--text-primary)' }}>
-        Stats
+      <h1
+        className="text-lg font-medium mb-4"
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}
+      >
+        {V.hunterRecord}
       </h1>
 
       <XPBar />
@@ -83,52 +84,52 @@ export default function Stats() {
 
       {/* Rank + streak summary */}
       <div className="flex gap-2 mb-6">
-        <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>Rank</p>
-          <p className="text-2xl font-medium font-display" style={{ color: 'var(--accent-cyan)' }}>{user.rank}</p>
+        <div className="flex-1 rounded-lg p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '0.5px solid var(--border-subtle)' }}>
+          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>{V.rankLabel}</p>
+          <p className="font-medium" style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-display)', fontSize: 28, letterSpacing: '0.08em' }}>{user.rank}</p>
         </div>
-        <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>Streak</p>
-          <p className="text-2xl font-medium font-display" style={{ color: 'var(--accent-gold)' }}>{Math.round(user.streak)}</p>
+        <div className="flex-1 rounded-lg p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '0.5px solid var(--border-subtle)' }}>
+          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>{V.streakLabel}</p>
+          <p className="font-medium" style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-numeric)', fontSize: 28 }}>{Math.round(user.streak)}</p>
         </div>
-        <div className="flex-1 rounded-xl p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>Total XP</p>
-          <p className="text-xl font-medium font-display" style={{ color: 'var(--text-primary)' }}>{user.totalXp.toLocaleString()}</p>
+        <div className="flex-1 rounded-lg p-3 text-center" style={{ backgroundColor: 'var(--bg-surface)', border: '0.5px solid var(--border-subtle)' }}>
+          <p className="text-xs mb-0.5" style={{ color: 'var(--text-tertiary)' }}>{V.totalXpLabel}</p>
+          <p className="font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-numeric)', fontSize: 20 }}>{user.totalXp.toLocaleString()}</p>
         </div>
       </div>
 
       {/* Stat progression chart */}
       <section className="mb-6">
         <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-          Stat levels — last 30 days
+          {V.statLevels30}
         </h2>
         <div
-          className="rounded-xl p-3"
-          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+          className="rounded-lg p-3"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '0.5px solid var(--border-subtle)' }}
         >
           <ResponsiveContainer width="100%" height={180}>
             <LineChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
               <XAxis
                 dataKey="day"
-                tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                tick={{ fill: 'rgba(232,220,196,0.4)', fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
                 interval={6}
               />
               <YAxis
-                tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }}
+                tick={{ fill: 'rgba(232,220,196,0.4)', fontSize: 10 }}
                 tickLine={false}
                 axisLine={false}
               />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'var(--bg-elevated)',
-                  border: '1px solid var(--border-strong)',
+                  backgroundColor: '#2B1F15',
+                  border: '0.5px solid rgba(212,165,83,0.28)',
                   borderRadius: 8,
-                  color: 'var(--text-primary)',
+                  color: '#E8DCC4',
                   fontSize: 12,
                 }}
-                labelStyle={{ color: 'var(--text-secondary)', marginBottom: 4 }}
+                labelStyle={{ color: 'rgba(232,220,196,0.65)', marginBottom: 4 }}
               />
               {STAT_KEYS.map((k) => (
                 <Line
@@ -143,10 +144,9 @@ export default function Stats() {
               ))}
             </LineChart>
           </ResponsiveContainer>
-          {/* Legend */}
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2 justify-center">
             {STAT_KEYS.map((k) => (
-              <span key={k} className="flex items-center gap-1 text-xs" style={{ color: 'var(--text-tertiary)' }}>
+              <span key={k} className="flex items-center gap-1 text-xs" style={{ color: 'rgba(232,220,196,0.4)' }}>
                 <span className="inline-block w-3 h-0.5 rounded" style={{ backgroundColor: STAT_COLORS[k] }} />
                 {k}
               </span>
@@ -159,28 +159,28 @@ export default function Stats() {
       {tagData.length > 0 && (
         <section className="mb-6">
           <h2 className="text-sm font-medium mb-3" style={{ color: 'var(--text-secondary)' }}>
-            Completions by tag
+            {V.completionsByTag}
           </h2>
           <div
-            className="rounded-xl p-3"
-            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+            className="rounded-lg p-3"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '0.5px solid var(--border-subtle)' }}
           >
             <ResponsiveContainer width="100%" height={140}>
               <BarChart data={tagData} margin={{ top: 4, right: 4, bottom: 0, left: -24 }}>
-                <XAxis dataKey="tag" tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }} tickLine={false} axisLine={false} />
-                <YAxis tick={{ fill: 'var(--text-tertiary)', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                <XAxis dataKey="tag" tick={{ fill: 'rgba(232,220,196,0.4)', fontSize: 10 }} tickLine={false} axisLine={false} />
+                <YAxis tick={{ fill: 'rgba(232,220,196,0.4)', fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{
-                    backgroundColor: 'var(--bg-elevated)',
-                    border: '1px solid var(--border-strong)',
+                    backgroundColor: '#2B1F15',
+                    border: '0.5px solid rgba(212,165,83,0.28)',
                     borderRadius: 8,
-                    color: 'var(--text-primary)',
+                    color: '#E8DCC4',
                     fontSize: 12,
                   }}
                 />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {tagData.map((_, i) => (
-                    <Cell key={i} fill={`hsl(${(i * 47) % 360}, 70%, 65%)`} />
+                    <Cell key={i} fill={`hsl(${30 + (i * 40) % 120}, 55%, 55%)`} />
                   ))}
                 </Bar>
               </BarChart>

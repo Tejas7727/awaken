@@ -20,6 +20,17 @@ const TYPE_LABEL: Record<Quest['type'], string> = {
   boss:   'Boss',
 };
 
+const DIFFICULTY_COLORS: Record<string, string> = {
+  'F':   'var(--difficulty-F)',
+  'E':   'var(--difficulty-E)',
+  'D':   'var(--difficulty-D)',
+  'C':   'var(--difficulty-C)',
+  'B':   'var(--difficulty-B)',
+  'A':   'var(--difficulty-A)',
+  'S':   'var(--difficulty-S)',
+  'S++': 'var(--difficulty-Spp)',
+};
+
 const reducedMotion = typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -43,18 +54,19 @@ export default function QuestCard({ quest }: Props) {
   };
 
   const statEntries = Object.entries(quest.stats).filter(([, v]) => (v as number) > 0);
+  const diffColor = quest.difficulty ? (DIFFICULTY_COLORS[quest.difficulty] ?? 'var(--text-tertiary)') : null;
 
   return (
     <motion.div
-      className="relative rounded-xl p-3 mb-2 flex items-start gap-3"
+      className="relative rounded-lg p-3 mb-2 flex items-start gap-3"
       style={{
         backgroundColor: 'var(--bg-surface)',
-        border: '1px solid var(--border-subtle)',
+        border: '0.5px solid var(--border-subtle)',
       }}
       animate={
         justCompleted && !reducedMotion
-          ? { opacity: [1, 1, 0.55], transition: { duration: 0.4, delay: 0.1 } }
-          : { opacity: isCompleted ? 0.55 : 1 }
+          ? { opacity: [1, 1, 0.5], transition: { duration: 0.4, delay: 0.1 } }
+          : { opacity: isCompleted ? 0.5 : 1 }
       }
     >
       {/* Checkbox */}
@@ -62,10 +74,10 @@ export default function QuestCard({ quest }: Props) {
         onClick={handleCheck}
         disabled={isCompleted}
         aria-label={isCompleted ? `${quest.title} — completed` : `Complete ${quest.title}`}
-        className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--accent-cyan)]"
+        className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-md border-2 flex items-center justify-center focus:outline-none focus-visible:ring-2"
         style={{
-          borderColor: isCompleted ? 'var(--accent-cyan)' : 'var(--border-strong)',
-          backgroundColor: isCompleted ? 'var(--accent-cyan)' : 'transparent',
+          borderColor: isCompleted ? 'var(--accent-gold)' : 'var(--border-strong)',
+          backgroundColor: isCompleted ? 'var(--accent-gold)' : 'transparent',
         }}
         whileTap={isCompleted || reducedMotion ? {} : { scale: 0.75 }}
         animate={
@@ -76,36 +88,58 @@ export default function QuestCard({ quest }: Props) {
       >
         {isCompleted && (
           <svg width="11" height="8" viewBox="0 0 11 8" fill="none" aria-hidden="true">
-            <path d="M1 4L4 7L10 1" stroke="#07090E" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M1 4L4 7L10 1" stroke="#1A1410" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         )}
       </motion.button>
 
       {/* Content */}
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+          {/* Type badge */}
           <span
             className="text-xs px-1.5 py-0.5 rounded font-medium"
             style={{
               backgroundColor: 'var(--bg-elevated)',
-              color: quest.type === 'shadow' ? 'var(--accent-magenta)' : 'var(--text-tertiary)',
+              color: quest.type === 'shadow' ? 'var(--accent-ember)' : 'var(--text-tertiary)',
+              fontFamily: 'var(--font-body)',
             }}
           >
             {TYPE_LABEL[quest.type]}
           </span>
-          <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          {/* Difficulty chip */}
+          {diffColor && (
+            <span
+              className="text-xs px-1.5 py-0.5 rounded font-medium"
+              style={{
+                backgroundColor: 'var(--bg-elevated)',
+                color: diffColor,
+                border: `0.5px solid ${diffColor}`,
+                fontFamily: 'var(--font-display)',
+                letterSpacing: '0.04em',
+              }}
+            >
+              {quest.difficulty}
+            </span>
+          )}
+          {/* Title — Cinzel */}
+          <span
+            className="text-sm font-medium"
+            style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.02em' }}
+          >
             {quest.title}
           </span>
         </div>
+        {/* Prose — Inter muted */}
         {quest.description && (
-          <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)' }}>
             {quest.description}
           </p>
         )}
 
-        {/* Stat chips with glow pulse on completion */}
+        {/* Stat chips */}
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          <span className="text-xs font-medium font-display" style={{ color: 'var(--accent-cyan)' }}>
+          <span className="text-xs font-medium" style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-numeric)' }}>
             +{Math.round(quest.xp)} XP
           </span>
           {statEntries.map(([stat, amount]) => {
@@ -114,7 +148,7 @@ export default function QuestCard({ quest }: Props) {
               <motion.span
                 key={stat}
                 className="text-xs px-1.5 py-0.5 rounded"
-                style={{ backgroundColor: 'var(--bg-elevated)', color }}
+                style={{ backgroundColor: 'var(--bg-elevated)', color, fontFamily: 'var(--font-numeric)' }}
                 animate={
                   justCompleted && !reducedMotion
                     ? {
@@ -131,13 +165,13 @@ export default function QuestCard({ quest }: Props) {
         </div>
       </div>
 
-      {/* XP flies upward */}
+      {/* XP fly */}
       <AnimatePresence>
         {showXpFly && (
           <motion.span
             key="xp-fly"
-            className="absolute right-3 top-1 text-xs font-medium font-display pointer-events-none"
-            style={{ color: 'var(--accent-cyan)' }}
+            className="absolute right-3 top-1 text-xs font-medium pointer-events-none"
+            style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-numeric)' }}
             initial={{ opacity: 1, y: 0 }}
             animate={{ opacity: 0, y: -28 }}
             exit={{ opacity: 0 }}

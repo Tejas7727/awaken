@@ -30,22 +30,22 @@ export default function StatGrid() {
         return (
           <div
             key={key}
-            className="rounded-xl p-3 flex flex-col gap-1"
+            className="rounded-lg p-3 flex flex-col gap-1"
             style={{
               backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
+              border: '0.5px solid var(--border-subtle)',
             }}
           >
             <div className="flex items-center justify-between">
               <span
-                className="text-xs font-medium font-display"
-                style={{ color: meta.color }}
+                className="text-xs font-medium"
+                style={{ color: meta.color, fontFamily: 'var(--font-numeric)' }}
               >
                 {meta.label}
               </span>
               <span
-                className="text-base font-medium font-display"
-                style={{ color: meta.color }}
+                className="font-medium"
+                style={{ color: meta.color, fontFamily: 'var(--font-numeric)', fontSize: 18 }}
               >
                 {Math.round(level)}
               </span>
@@ -59,7 +59,7 @@ export default function StatGrid() {
                 style={{ width: `${pct}%`, backgroundColor: meta.color }}
               />
             </div>
-            <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>
+            <span className="text-xs" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-numeric)' }}>
               {Math.round(xp)}/{Math.round(needed)} xp
             </span>
           </div>

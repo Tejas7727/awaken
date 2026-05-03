@@ -7,30 +7,35 @@ import { getEffectiveDay } from './time';
 import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type StoryNode, type Title, type UserState } from './schemas';
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
-import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, type GistSnapshot } from './github';
+import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, pushArchiveToGist, type GistSnapshot } from './github';
 import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError } from './supabase';
+import { V } from './voice';
 
-const LLM_PROMPT = `You are the Awaken Quest Master. The player has shared their state. Generate the next set of quests so that:
-- They match the player's current rank and stats — do not propose impossible quests for an E-rank.
-- They cover at least the number of stats listed in rules.minStatsCovered.
-- There are exactly rules.dailyQuestCount daily quests.
-- There are rules.weeklyQuestCount weekly quests if today is a Monday, otherwise none new (the player keeps last week's).
-- There is exactly 1 shadow quest if dayCount % rules.shadowQuestEvery == 0, otherwise none.
-- They reference focusAreas heavily.
-- Each quest is specific and measurable ("walk 6,000 steps", not "walk more").
+const DAILY_CAP = 5;
+
+const LLM_PROMPT = `You are the Quest Master of the Tower of Trials. The Hunter has shared their state. Generate the next quest pack so that:
+- Quest difficulties match the Hunter's current rank band (±1 rank).
+- There are exactly 5 daily quests.
+- There is 1 weekly quest if today is Monday, otherwise none.
+- There is 1 shadow trial if dayCount % rules.shadowQuestEvery == 0, otherwise none.
+- Quests reference focusAreas heavily.
+- Each quest is specific and measurable.
 - The set varies meaningfully from the last seven days.
-- Optionally append a 1-2 sentence story beat continuing the current chapter.
-- Optionally award a title if a clear milestone was hit.
+- Voice: Tower-bardic. Each quest has: title (Cinzel-style, ≤60 chars), description (prose, ≤140 chars), instruction embedded in title.
+- XP scale: F=10–15, E=15–20, D=18–25, C=25–35, B=35–50, A=60–90, S=90–150, S++=150–250.
 
-Respond with ONLY a single JSON object that matches this schema. No prose, no markdown, no fences:
+Optionally include a storyBeat (1–2 sentence chronicle fragment) and a titleAward if a milestone was hit.
+
+Respond with ONLY a single JSON object. No prose, no markdown fences:
 
 {
   "quests": [
     {
       "id": "kebab-case-unique-slug",
       "type": "daily" | "weekly" | "shadow" | "side" | "boss",
-      "title": "string, sentence case, ≤80 chars",
-      "description": "string, ≤200 chars, optional",
+      "difficulty": "F" | "E" | "D" | "C" | "B" | "A" | "S" | "S++",
+      "title": "string, sentence case, ≤60 chars",
+      "description": "bardic prose, ≤140 chars",
       "stats": { "STR": 0, "AGI": 15, "VIT": 0, "INT": 0, "WIS": 0, "CHA": 0 },
       "xp": 25,
       "tags": ["movement","outdoor"]
@@ -60,17 +65,16 @@ interface AwakenState {
   importPreview: LLMQuestImportPreview | null;
   importError: string | null;
   importJson: string;
-
   statHistory: Array<{ day: string; stat: string; value: number }>;
-
   syncStatus: 'idle' | 'syncing' | 'error';
   syncBanner: string | null;
   lastSyncedAt: string | null;
+  showArchivePrompt: boolean;
 
   // Auth state
   authSession: Session | null;
   authLoading: boolean;
-  isLegacyUser: boolean; // has local IndexedDB data but no cloudUserId
+  isLegacyUser: boolean;
 
   initAuth: () => Promise<void>;
   signIn: (playerName: string, password: string) => Promise<string | null>;
@@ -81,6 +85,8 @@ interface AwakenState {
   init: () => Promise<void>;
   completeQuest: (questId: string) => Promise<void>;
   runRolloverCheck: () => Promise<void>;
+  runArchiveCheck: () => Promise<void>;
+  restDay: () => Promise<void>;
   exportDailyPack: () => Promise<void>;
   setImportJson: (json: string) => void;
   submitImport: () => void;
@@ -92,6 +98,7 @@ interface AwakenState {
   dismissLevelUp: () => void;
   showToast: (msg: string) => void;
   dismissToast: () => void;
+  dismissArchivePrompt: () => void;
 
   connectGist: (token: string) => Promise<void>;
   pushToGist: () => Promise<void>;
@@ -100,7 +107,6 @@ interface AwakenState {
   dismissSyncBanner: () => void;
 }
 
-// Module-level debounce timer for gist sync
 let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useStore = create<AwakenState>((set, get) => ({
@@ -121,6 +127,7 @@ export const useStore = create<AwakenState>((set, get) => ({
   syncStatus: 'idle',
   syncBanner: null,
   lastSyncedAt: null,
+  showArchivePrompt: false,
   authSession: null,
   authLoading: true,
   isLegacyUser: false,
@@ -130,6 +137,7 @@ export const useStore = create<AwakenState>((set, get) => ({
     setTimeout(() => set({ toast: null }), 3000);
   },
   dismissToast: () => set({ toast: null }),
+  dismissArchivePrompt: () => set({ showArchivePrompt: false }),
 
   init: async () => {
     await seedIfEmpty();
@@ -163,9 +171,14 @@ export const useStore = create<AwakenState>((set, get) => ({
       loading: false,
       lastSyncedAt: syncLog?.syncedAt ?? null,
     });
+
+    // Apply theme to document
+    document.documentElement.setAttribute('data-theme', settings.theme ?? 'dark');
+
     await get().runRolloverCheck();
-    // Non-blocking: check if cloud has newer data
     get().pullCheckOnLaunch();
+    // Non-blocking archive check (once per day)
+    get().runArchiveCheck();
   },
 
   completeQuest: async (questId: string) => {
@@ -191,7 +204,7 @@ export const useStore = create<AwakenState>((set, get) => ({
     await db.completions.put(newCompletion);
 
     const newTotalXp = user.totalXp + quest.xp;
-    // I/O boundary — stat keys come from Object.entries, cast to mutable string-indexed records
+    // I/O boundary — stat keys come from Object.entries
     const newStats: Record<string, number> = { ...user.stats };
     const newStatXp: Record<string, number> = { ...user.statXp };
 
@@ -210,7 +223,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     const newRank = computeRank(sumStats, user.streak);
     const newPlayerLevel = computePlayerLevel(newTotalXp);
 
-    // Streak: increment if first completion of a new effective day
     let newStreak = user.streak;
     if (user.lastActiveDay !== today) {
       const yesterday = getEffectiveDay(new Date(now.getTime() - 86400000), settings.rolloverHour);
@@ -226,13 +238,12 @@ export const useStore = create<AwakenState>((set, get) => ({
       totalXp: newTotalXp,
       stats: newStats,
       statXp: newStatXp,
-      rank: newRank as UserState['rank'],
+      rank: newRank,
       playerLevel: newPlayerLevel,
       streak: newStreak,
       lastActiveDay: today,
     };
 
-    // Check title rules
     const allCompletions = await db.completions.toArray();
     const morningCompletions = allCompletions.filter((c) => new Date(c.completedAt).getHours() < 9).length;
     const shadowCompletions = allCompletions.filter((c) => {
@@ -256,7 +267,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     // I/O boundary — Dexie row type differs from domain type
     await db.user.put({ id: 'me', ...updatedUser } as unknown as import('./db').UserStateRow);
 
-    // Snapshot each stat value for the day (upsert)
     for (const stat of Object.keys(newStats)) {
       await db.stats_daily.put({ day: today, stat, value: newStats[stat] });
     }
@@ -267,6 +277,8 @@ export const useStore = create<AwakenState>((set, get) => ({
     const statHistory2 = await db.stats_daily.toArray();
 
     const didLevelUp = newPlayerLevel > user.playerLevel;
+    const didRankUp = newRank !== user.rank;
+
     set({
       user: updatedUser,
       todayCompletedIds: newTodayCompletedIds,
@@ -276,7 +288,9 @@ export const useStore = create<AwakenState>((set, get) => ({
       levelUpData: didLevelUp ? { level: newPlayerLevel, rank: newRank } : get().levelUpData,
     });
 
-    // Debounced gist push — 30 s after last completion
+    if (didRankUp && !didLevelUp) get().showToast(V.toastRankUp);
+    else get().showToast(V.toastQuestComplete);
+
     if (syncDebounceTimer) clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(() => { get().pushToGist(); }, 30_000);
   },
@@ -292,13 +306,25 @@ export const useStore = create<AwakenState>((set, get) => ({
       const yesterday = getEffectiveDay(new Date(Date.now() - 86400000), settings.rolloverHour);
       if (user.lastActiveDay !== yesterday) {
         const updatedUser = { ...user, streak: 0 };
-        // I/O boundary — Dexie row type differs from domain type
+        // I/O boundary
         await db.user.put({ id: 'me', ...updatedUser } as unknown as import('./db').UserStateRow);
         set({ user: updatedUser });
       }
     }
 
-    // Unlock story nodes whose level threshold is now met
+    // Reset rest tokens on Monday
+    const nowDate = new Date();
+    const dayOfWeek = nowDate.getDay(); // 0=Sun, 1=Mon
+    if (dayOfWeek === 1) {
+      const restResetsOn = user.restDaysResetsOn;
+      if (!restResetsOn || restResetsOn < today) {
+        const updatedUser = { ...user, restDaysRemaining: 2, restDaysResetsOn: today };
+        await db.user.put({ id: 'me', ...updatedUser } as unknown as import('./db').UserStateRow);
+        set({ user: updatedUser });
+      }
+    }
+
+    // Unlock story nodes
     const stories = await db.stories.toArray();
     const now = new Date().toISOString();
     const currentLevel = user.playerLevel;
@@ -312,6 +338,76 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     const updatedStories = await db.stories.toArray();
     set({ stories: updatedStories });
+  },
+
+  runArchiveCheck: async () => {
+    const { settings } = get();
+    if (!settings) return;
+
+    // Debounce to once per 24h
+    const today = getEffectiveDay(new Date(), settings.rolloverHour);
+    const lastCheck = localStorage.getItem('awaken_archive_check');
+    if (lastCheck === today) return;
+    localStorage.setItem('awaken_archive_check', today);
+
+    const cutoff = getEffectiveDay(new Date(Date.now() - 90 * 86400000), settings.rolloverHour);
+    const oldCompletions = await db.completions.where('effectiveDay').below(cutoff).toArray();
+    if (oldCompletions.length === 0) return;
+
+    if (!settings.githubToken || !settings.gistId) {
+      // Prompt user to configure archive
+      set({ showArchivePrompt: true });
+      return;
+    }
+
+    const archiveGistId = settings.archiveGistId ?? settings.gistId;
+    try {
+      await pushArchiveToGist(settings.githubToken, archiveGistId, oldCompletions);
+      const oldIds = oldCompletions.map((c) => c.id);
+      await db.completions.bulkDelete(oldIds);
+      const completions = await db.completions.toArray();
+      set({ completions });
+      if (!settings.archiveGistId) {
+        await get().updateSettings({ archiveGistId });
+      }
+    } catch (err) {
+      console.error('Archive check error:', err);
+    }
+  },
+
+  restDay: async () => {
+    const { user, settings } = get();
+    if (!user || !settings) return;
+
+    const restDaysRemaining = user.restDaysRemaining ?? 2;
+    if (restDaysRemaining <= 0) return;
+
+    const now = new Date();
+    const today = getEffectiveDay(now, settings.rolloverHour);
+
+    // Mark today as rested — preserves streak by counting as active
+    const completion: QuestCompletion = {
+      id: nanoid(),
+      questId: '__rest__',
+      completedAt: now.toISOString(),
+      effectiveDay: today,
+      xpAwarded: 0,
+      statsAwarded: {},
+    };
+    await db.completions.put(completion);
+
+    // Preserve streak: set lastActiveDay = today without incrementing streak
+    const updatedUser: UserState = {
+      ...user,
+      restDaysRemaining: restDaysRemaining - 1,
+      lastActiveDay: today,
+    };
+    await db.user.put({ id: 'me', ...updatedUser } as unknown as import('./db').UserStateRow);
+
+    const completions = await db.completions.toArray();
+    const newTodayIds = new Set([...get().todayCompletedIds, '__rest__']);
+    set({ user: updatedUser, completions, todayCompletedIds: newTodayIds });
+    get().showToast(V.restToast);
   },
 
   exportDailyPack: async () => {
@@ -354,7 +450,7 @@ export const useStore = create<AwakenState>((set, get) => ({
         },
         focusAreas: settings.focusAreas,
         rules: {
-          dailyQuestCount: settings.dailyQuestCount,
+          dailyQuestCount: DAILY_CAP,
           shadowQuestEvery: settings.shadowQuestEvery,
           weeklyQuestCount: settings.weeklyQuestCount,
           minStatsCovered: settings.minStatsCovered,
@@ -364,7 +460,7 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     try {
       await navigator.clipboard.writeText(JSON.stringify(exportPack, null, 2));
-      get().showToast('Export copied to clipboard');
+      get().showToast('Pack copied — paste into your LLM');
     } catch {
       get().showToast('Failed to copy — check clipboard permissions');
     }
@@ -392,6 +488,12 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     const data = result.data;
     const dailyQuests = data.quests.filter((q) => q.type === 'daily');
+
+    // Hard daily cap
+    if (dailyQuests.length > DAILY_CAP) {
+      set({ importError: V.importTooManyDailies(dailyQuests.length) });
+      return;
+    }
     if (dailyQuests.some((q) => q.xp > 100)) {
       set({ importError: 'A daily quest has XP > 100, which is not allowed.' });
       return;
@@ -462,7 +564,7 @@ export const useStore = create<AwakenState>((set, get) => ({
     ]);
 
     set({ quests, stories, titles, importPreview: null, importJson: '' });
-    get().showToast('Quests imported successfully');
+    get().showToast(V.toastImported);
   },
 
   dismissImportPreview: () => set({ importPreview: null }),
@@ -471,9 +573,13 @@ export const useStore = create<AwakenState>((set, get) => ({
     const { settings } = get();
     if (!settings) return;
     const updated = { ...settings, ...partial };
-    // I/O boundary — Dexie row type differs from domain type
+    // I/O boundary
     await db.settings.put({ id: 'settings', ...updated } as unknown as import('./db').SettingsRow);
     set({ settings: updated });
+    // Apply theme change immediately
+    if (partial.theme) {
+      document.documentElement.setAttribute('data-theme', partial.theme);
+    }
   },
 
   resetAllData: async () => {
@@ -498,20 +604,14 @@ export const useStore = create<AwakenState>((set, get) => ({
       db.stats_daily.toArray(),
     ]);
     if (!userRow || !settingsRow) return;
-    // I/O boundary — Dexie rows are plain objects; cast to domain types
+    // I/O boundary
     const user = userRow as unknown as UserState;
     const settings = settingsRow as unknown as Settings;
     set({
-      user,
-      settings,
-      quests,
-      completions,
-      stories,
-      titles,
-      statHistory,
+      user, settings, quests, completions, stories, titles, statHistory,
       todayCompletedIds: new Set(),
     });
-    get().showToast('All data reset');
+    get().showToast(V.toastResetDone);
   },
 
   addSideQuest: async (title, stats, xp, tags) => {
@@ -530,7 +630,7 @@ export const useStore = create<AwakenState>((set, get) => ({
     await db.quests.put(quest);
     const quests = await db.quests.toArray();
     set({ quests });
-    get().showToast('Side quest added');
+    get().showToast(V.toastSideAdded);
   },
 
   dismissLevelUp: () => set({ levelUpData: null }),
@@ -539,12 +639,10 @@ export const useStore = create<AwakenState>((set, get) => ({
 
   initAuth: async () => {
     if (!isSupabaseConfigured) {
-      // Dev/local mode without Supabase — treat as authenticated locally
       set({ authLoading: false, authSession: null });
       return;
     }
 
-    // Subscribe to auth changes (session refresh, sign-out)
     supabase.auth.onAuthStateChange((_event, session) => {
       set({ authSession: session });
       if (!session) {
@@ -564,11 +662,9 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     set({ authSession: session });
 
-    // Detect legacy local-only user (has data but never linked to cloud)
     const localUser = await db.user.get('me');
     if (localUser && !localUser.cloudUserId) {
       set({ authLoading: false, isLegacyUser: true });
-      // Still load local state so Migrate page can display their name
       await get().init();
       return;
     }
@@ -587,15 +683,12 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     set({ authSession: data.session });
 
-    // Seed local DB if this is a new device (no local data)
     const localUser = await db.user.get('me');
     if (!localUser) {
       await seedIfEmpty();
-      // Mark cloudUserId
       const row = await db.user.get('me');
       if (row) await db.user.put({ ...row, cloudUserId: data.user.id });
     } else if (!localUser.cloudUserId) {
-      // Legacy user who signed in — route to migration
       set({ authLoading: false, isLegacyUser: true });
       await get().init();
       return null;
@@ -619,7 +712,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     }
     if (!data.session) return 'Account created — check your email to confirm, then sign in.';
 
-    // Create the profile row
     const { data: rpc, error: rpcErr } = await supabase.rpc('create_profile', {
       p_player_name: playerName,
     });
@@ -639,13 +731,11 @@ export const useStore = create<AwakenState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
-    // State reset handled by onAuthStateChange subscription
   },
 
   migrateLocalData: async (playerName: string, password: string): Promise<string | null> => {
     const { user, completions } = get();
 
-    // Sign up with the local player's data
     const { data, error } = await supabase.auth.signUp({
       email: playerEmail(playerName),
       password,
@@ -658,7 +748,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     }
     if (!data.session) return 'Account created — check your email to confirm, then sign in.';
 
-    // Create profile with existing local state
     const { data: rpc, error: rpcErr } = await supabase.rpc('create_profile', {
       p_player_name: playerName,
       p_rank: user?.rank ?? 'F',
@@ -674,7 +763,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     const result = rpc as { error?: string; message?: string };
     if (result?.error) return result.message ?? 'Profile creation failed';
 
-    // Push completions to Supabase
     if (completions.length > 0) {
       const rows = completions.map((c) => ({
         user_id: data.user!.id,
@@ -684,13 +772,11 @@ export const useStore = create<AwakenState>((set, get) => ({
         xp_awarded: c.xpAwarded,
         stats_awarded: c.statsAwarded,
       }));
-      // Insert in batches of 200
       for (let i = 0; i < rows.length; i += 200) {
         await supabase.from('completions').insert(rows.slice(i, i + 200));
       }
     }
 
-    // Mark local user as migrated
     const localUser = await db.user.get('me');
     if (localUser) {
       await db.user.put({ ...localUser, name: playerName, cloudUserId: data.user!.id });
@@ -718,22 +804,20 @@ export const useStore = create<AwakenState>((set, get) => ({
           if (!localAt || result.updatedAt > localAt) {
             set({ syncBanner: 'Cloud data found — load it to sync your progress?', syncStatus: 'idle' });
           } else {
-            // Local is up-to-date; push local state
             const snapshot = await buildSnapshot(token);
             await updateGist(token, gistId, snapshot);
             await db.syncLog.put({ id: 'sync', syncedAt: new Date().toISOString() });
             set({ lastSyncedAt: new Date().toISOString(), syncStatus: 'idle' });
-            get().showToast('Gist linked and synced');
+            get().showToast(V.toastGistLinked);
           }
         }
       } else {
-        // No existing gist — create one with current state
         const snapshot = await buildSnapshot(token);
         gistId = await createGist(token, snapshot);
         await get().updateSettings({ gistId });
         await db.syncLog.put({ id: 'sync', syncedAt: new Date().toISOString() });
         set({ lastSyncedAt: new Date().toISOString(), syncStatus: 'idle' });
-        get().showToast('Gist created — sync active');
+        get().showToast(V.toastGistCreated);
       }
     } catch (err) {
       console.error('connectGist error:', err);
@@ -770,23 +854,20 @@ export const useStore = create<AwakenState>((set, get) => ({
         set({ syncBanner: 'Newer data on cloud — review and merge?' });
       }
     } catch {
-      // Silently skip — offline or token issue; don't block the app
+      // Silently skip — offline or token issue
     }
   },
 
   applyGistSnapshot: async (snapshot: GistSnapshot) => {
     set({ syncStatus: 'syncing' });
     try {
-      // Merge completions: union by id (append-only)
       const localCompletions = await db.completions.toArray();
       const localIds = new Set(localCompletions.map((c) => c.id));
       const newCompletions = snapshot.completions.filter((c) => !localIds.has(c.id));
       if (newCompletions.length) await db.completions.bulkPut(newCompletions);
 
-      // Merge quests: gist wins for same id; add new ones
       await db.quests.bulkPut(snapshot.quests);
 
-      // Merge stories: take whichever has unlockedAt set
       const localStories = await db.stories.toArray();
       const localStoryMap = new Map(localStories.map((s) => [s.id, s]));
       for (const node of snapshot.stories) {
@@ -796,7 +877,6 @@ export const useStore = create<AwakenState>((set, get) => ({
         }
       }
 
-      // Merge titles: take whichever has earnedAt set
       const localTitles = await db.titles.toArray();
       const localTitleMap = new Map(localTitles.map((t) => [t.id, t]));
       for (const title of snapshot.titles) {
@@ -806,7 +886,6 @@ export const useStore = create<AwakenState>((set, get) => ({
         }
       }
 
-      // Merge stats_daily: gist wins (take whichever value is higher)
       for (const row of snapshot.stats_daily) {
         const existing = await db.stats_daily.get([row.day, row.stat]);
         if (!existing || row.value > existing.value) {
@@ -814,7 +893,6 @@ export const useStore = create<AwakenState>((set, get) => ({
         }
       }
 
-      // User: take the one with more totalXp (more progress)
       const localUser = await db.user.get('me');
       if (!localUser || snapshot.user.totalXp > localUser.totalXp) {
         await db.user.put(snapshot.user);
@@ -823,7 +901,6 @@ export const useStore = create<AwakenState>((set, get) => ({
       const now = new Date().toISOString();
       await db.syncLog.put({ id: 'sync', syncedAt: now });
 
-      // Reload everything into store state
       const [userRow, quests, completions, stories, titles, statHistory] = await Promise.all([
         db.user.get('me'),
         db.quests.toArray(),
@@ -839,12 +916,7 @@ export const useStore = create<AwakenState>((set, get) => ({
 
       set({
         user: userRow as unknown as UserState,
-        quests,
-        completions,
-        stories,
-        titles,
-        statHistory,
-        todayCompletedIds,
+        quests, completions, stories, titles, statHistory, todayCompletedIds,
         syncBanner: null,
         lastSyncedAt: now,
         syncStatus: 'idle',

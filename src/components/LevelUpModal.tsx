@@ -1,5 +1,6 @@
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../lib/store';
+import { V } from '../lib/voice';
 
 const reducedMotion = typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -14,7 +15,7 @@ export default function LevelUpModal() {
         <motion.div
           key="levelup-backdrop"
           className="fixed inset-0 z-50 flex items-center justify-center px-6"
-          style={{ backgroundColor: 'rgba(7,9,14,0.92)' }}
+          style={{ backgroundColor: 'rgba(15,10,6,0.92)' }}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -26,8 +27,8 @@ export default function LevelUpModal() {
             className="w-full max-w-sm rounded-2xl p-8 text-center"
             style={{
               backgroundColor: 'var(--bg-surface)',
-              border: '1px solid var(--accent-cyan)',
-              boxShadow: '0 0 48px rgba(77,233,255,0.25)',
+              border: '1px solid var(--accent-gold)',
+              boxShadow: '0 0 48px rgba(212,165,83,0.25)',
             }}
             initial={reducedMotion ? {} : { scale: 0.8, opacity: 0, y: 24 }}
             animate={reducedMotion ? {} : { scale: 1, opacity: 1, y: 0 }}
@@ -41,20 +42,20 @@ export default function LevelUpModal() {
               style={{
                 width: 96,
                 height: 96,
-                border: '2px solid var(--accent-cyan)',
+                border: '2px solid var(--accent-gold)',
               }}
               animate={reducedMotion ? {} : {
                 boxShadow: [
-                  '0 0 0px rgba(77,233,255,0)',
-                  '0 0 32px rgba(77,233,255,0.7)',
-                  '0 0 8px rgba(77,233,255,0.3)',
+                  '0 0 0px rgba(212,165,83,0)',
+                  '0 0 32px rgba(212,165,83,0.7)',
+                  '0 0 8px rgba(212,165,83,0.3)',
                 ],
               }}
               transition={{ duration: 1.2, repeat: Infinity, repeatType: 'reverse' }}
             >
               <motion.span
-                className="text-3xl font-medium font-display"
-                style={{ color: 'var(--accent-cyan)' }}
+                className="text-3xl font-medium"
+                style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-display)' }}
                 initial={reducedMotion ? {} : { scale: 0.5 }}
                 animate={reducedMotion ? {} : { scale: 1 }}
                 transition={{ type: 'spring', stiffness: 400, damping: 18, delay: 0.15 }}
@@ -63,22 +64,22 @@ export default function LevelUpModal() {
               </motion.span>
             </motion.div>
 
-            <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-tertiary)' }}>
-              Level up
+            <p className="text-xs font-medium mb-1 uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)' }}>
+              {V.levelUpLabel}
             </p>
-            <h2 className="text-xl font-medium font-display mb-1" style={{ color: 'var(--text-primary)' }}>
-              Level {levelUpData.level} reached
+            <h2 className="text-xl font-medium mb-1" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}>
+              {V.levelUpLevel(levelUpData.level)}
             </h2>
-            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)' }}>
-              Current rank: <span style={{ color: 'var(--accent-cyan)' }}>{levelUpData.rank}</span>
+            <p className="text-sm mb-6" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>
+              {V.levelUpRank(levelUpData.rank)}
             </p>
 
             <button
               onClick={dismissLevelUp}
               className="w-full py-3 rounded-xl text-sm font-medium"
-              style={{ backgroundColor: 'var(--accent-cyan)', color: 'var(--bg-base)' }}
+              style={{ backgroundColor: 'var(--accent-gold)', color: 'var(--text-on-gold)', fontFamily: 'var(--font-body)' }}
             >
-              Continue
+              {V.levelUpContinue}
             </button>
           </motion.div>
         </motion.div>

@@ -14,7 +14,9 @@ export interface UserStateRow {
   lastActiveDay: string | null;
   currentChapter: number;
   earnedTitleIds: string[];
-  cloudUserId?: string; // set after Supabase account is linked/created
+  restDaysRemaining: number;
+  restDaysResetsOn: string | null;
+  cloudUserId?: string;
 }
 
 export interface SettingsRow {
@@ -27,7 +29,8 @@ export interface SettingsRow {
   focusAreas: string[];
   githubToken?: string;
   gistId?: string;
-  themeAccent: 'cyan' | 'magenta' | 'gold';
+  archiveGistId?: string;
+  theme: 'dark' | 'light';
 }
 
 interface StatDailyRow {
@@ -62,6 +65,27 @@ export class AwakenDB extends Dexie {
       titles: 'id, earnedAt',
       settings: 'id',
       syncLog: 'id, syncedAt',
+    });
+    // Version 2: adds restDaysRemaining, restDaysResetsOn, archiveGistId, theme
+    // Dexie does not require schema change for non-indexed fields, handled with defaults
+    this.version(2).stores({
+      user: 'id',
+      quests: 'id, type, source, expiresAt',
+      completions: 'id, questId, effectiveDay, completedAt',
+      stats_daily: '[day+stat], day, stat',
+      stories: 'id, chapter, unlockedAt',
+      titles: 'id, earnedAt',
+      settings: 'id',
+      syncLog: 'id, syncedAt',
+    }).upgrade(async (tx) => {
+      await tx.table('user').toCollection().modify((row) => {
+        if (row.restDaysRemaining === undefined) row.restDaysRemaining = 2;
+        if (row.restDaysResetsOn === undefined) row.restDaysResetsOn = null;
+      });
+      await tx.table('settings').toCollection().modify((row) => {
+        if (row.theme === undefined) row.theme = 'dark';
+        if (row.archiveGistId === undefined) row.archiveGistId = undefined;
+      });
     });
   }
 }

@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { useStore } from '../lib/store';
+import { V } from '../lib/voice';
 import QuestList from '../components/quest/QuestList';
 import ImportPanel from '../components/quest/ImportPanel';
 import type { Quest, StatKey } from '../lib/schemas';
 
 const GROUPS: Array<{ type: Quest['type']; label: string }> = [
-  { type: 'daily',  label: 'Daily' },
-  { type: 'shadow', label: 'Shadow' },
-  { type: 'weekly', label: 'Weekly' },
-  { type: 'side',   label: 'Side' },
-  { type: 'boss',   label: 'Boss' },
+  { type: 'daily',  label: V.typeDaily },
+  { type: 'shadow', label: V.typeShadow },
+  { type: 'weekly', label: V.typeWeekly },
+  { type: 'side',   label: V.typeSide },
+  { type: 'boss',   label: V.typeBoss },
 ];
 
 const STAT_KEYS: StatKey[] = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA'];
@@ -22,15 +23,18 @@ export default function Quests() {
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-medium font-display" style={{ color: 'var(--text-primary)' }}>
+        <h1
+          className="text-lg font-medium"
+          style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}
+        >
           Quests
         </h1>
         <button
           onClick={() => setShowForm((v) => !v)}
           className="text-sm px-3 py-1.5 rounded-lg font-medium"
           style={{
-            backgroundColor: showForm ? 'var(--bg-elevated)' : 'var(--accent-cyan)',
-            color: showForm ? 'var(--text-secondary)' : 'var(--bg-base)',
+            backgroundColor: showForm ? 'var(--bg-elevated)' : 'var(--accent-gold)',
+            color: showForm ? 'var(--text-secondary)' : 'var(--text-on-gold)',
           }}
         >
           {showForm ? 'Cancel' : '+ Side quest'}
@@ -54,7 +58,10 @@ export default function Quests() {
           if (group.length === 0) return null;
           return (
             <section key={type} className="mb-5">
-              <h2 className="text-xs font-medium mb-2 uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>
+              <h2
+                className="text-xs font-medium mb-2 uppercase tracking-wide"
+                style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)' }}
+              >
                 {label} ({group.length})
               </h2>
               <QuestList quests={group} />
@@ -63,7 +70,7 @@ export default function Quests() {
         })}
         {quests.length === 0 && (
           <p className="text-sm text-center py-8" style={{ color: 'var(--text-tertiary)' }}>
-            No quests yet. Import from LLM or add a side quest.
+            {V.noQuestsYet}
           </p>
         )}
       </div>
@@ -102,7 +109,7 @@ function SideQuestForm({ onAdd }: SideQuestFormProps) {
 
   return (
     <div
-      className="rounded-xl p-4 mb-4"
+      className="rounded-lg p-4 mb-4"
       style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
     >
       <p className="text-xs font-medium mb-3 uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>
@@ -121,7 +128,7 @@ function SideQuestForm({ onAdd }: SideQuestFormProps) {
       <div className="grid grid-cols-3 gap-1.5 mb-2">
         {STAT_KEYS.map((stat) => (
           <div key={stat} className="flex items-center gap-1.5">
-            <span className="text-xs w-8" style={{ color: 'var(--text-tertiary)' }}>{stat}</span>
+            <span className="text-xs w-8" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-numeric)' }}>{stat}</span>
             <input
               type="number"
               min={0} max={200}
@@ -158,15 +165,15 @@ function SideQuestForm({ onAdd }: SideQuestFormProps) {
         </div>
       </div>
 
-      {error && <p className="text-xs mb-2" style={{ color: 'var(--accent-magenta)' }}>{error}</p>}
+      {error && <p className="text-xs mb-2" style={{ color: 'var(--accent-ember)' }}>{error}</p>}
 
       <button
         onClick={handleSubmit}
         disabled={saving}
         className="w-full py-2 rounded-lg text-sm font-medium"
-        style={{ backgroundColor: 'var(--accent-cyan)', color: 'var(--bg-base)' }}
+        style={{ backgroundColor: 'var(--accent-gold)', color: 'var(--text-on-gold)' }}
       >
-        {saving ? 'Adding…' : 'Add quest'}
+        {saving ? 'Inscribing…' : 'Inscribe trial'}
       </button>
     </div>
   );

@@ -14,7 +14,7 @@ export async function seedIfEmpty() {
     id: 'me',
     name: 'Awakened',
     startedAt: now,
-    rank: 'E',
+    rank: 'F',
     playerLevel: 1,
     totalXp: 0,
     stats: { STR: 1, AGI: 1, VIT: 1, INT: 1, WIS: 1, CHA: 1 },
@@ -23,24 +23,27 @@ export async function seedIfEmpty() {
     lastActiveDay: null,
     currentChapter: 1,
     earnedTitleIds: [],
+    restDaysRemaining: 2,
+    restDaysResetsOn: null,
   });
 
   await db.settings.put({
     id: 'settings',
     rolloverHour: 4,
-    dailyQuestCount: 4,
+    dailyQuestCount: 5,
     weeklyQuestCount: 2,
     shadowQuestEvery: 3,
     minStatsCovered: 4,
     focusAreas: [],
-    themeAccent: 'cyan',
+    theme: 'dark',
   });
 
   const seedQuests: Quest[] = SEED_QUESTS.map((q) => ({
     id: q.id,
     type: q.type as Quest['type'],
+    difficulty: (q as { difficulty?: string }).difficulty as Quest['difficulty'],
     title: q.title,
-    description: 'description' in q ? (q as { description?: string }).description : undefined,
+    description: (q as { description?: string }).description,
     stats: q.stats as Record<string, number>,
     xp: q.xp,
     tags: [...q.tags],
@@ -56,7 +59,6 @@ export async function seedIfEmpty() {
       chapter: chapter.chapter,
       body: node.body,
       unlockAtPlayerLevel: node.unlockAtPlayerLevel,
-      // Unlock the very first node immediately
       unlockedAt: node.unlockAtPlayerLevel === 1 ? now : null,
       source: 'seed' as const,
     }))

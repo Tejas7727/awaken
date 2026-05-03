@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
 import { NavLink, Link } from 'react-router-dom';
+import { V } from '../../lib/voice';
 import BottomNav from './BottomNav';
 
 const NAV_ITEMS = [
-  { to: '/',         label: 'Home',     end: true  },
-  { to: '/quests',   label: 'Quests',   end: false },
-  { to: '/stats',    label: 'Stats',    end: false },
-  { to: '/story',    label: 'Story',    end: false },
-  { to: '/progress', label: 'Progress', end: false },
+  { to: '/',         label: V.navHome,     end: true  },
+  { to: '/quests',   label: V.navQuests,   end: false },
+  { to: '/stats',    label: V.navStats,    end: false },
+  { to: '/story',    label: V.navStory,    end: false },
+  { to: '/progress', label: V.navProgress, end: false },
 ];
 
 interface Props {
@@ -17,24 +18,23 @@ interface Props {
 export default function AppShell({ children }: Props) {
   return (
     <div className="flex flex-col min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
-      {/* Persistent shell header — visible at all widths */}
       <header
         className="sticky top-0 z-30 flex items-center h-12 px-4"
         style={{
           backgroundColor: 'var(--bg-surface)',
-          borderBottom: '1px solid var(--border-subtle)',
+          borderBottom: '0.5px solid var(--border-subtle)',
         }}
       >
         {/* Brand */}
         <Link
           to="/"
-          className="text-sm font-medium font-display mr-6 flex-shrink-0"
-          style={{ color: 'var(--accent-cyan)' }}
+          className="text-sm font-medium mr-6 flex-shrink-0"
+          style={{ color: 'var(--accent-gold)', fontFamily: 'var(--font-display)', letterSpacing: '0.1em' }}
         >
-          Awaken
+          {V.brand}
         </Link>
 
-        {/* Desktop top tabs — hidden below md */}
+        {/* Desktop top tabs */}
         <nav className="hidden md:flex items-center gap-1 flex-1">
           {NAV_ITEMS.map(({ to, label, end }) => (
             <NavLink
@@ -42,26 +42,26 @@ export default function AppShell({ children }: Props) {
               to={to}
               end={end}
               className={({ isActive }) =>
-                `px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                `px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                   isActive
-                    ? 'text-[var(--accent-cyan)] bg-[var(--bg-elevated)]'
+                    ? 'text-[var(--accent-gold)] bg-[var(--bg-elevated)]'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
                 }`
               }
+              style={{ fontFamily: 'var(--font-body)' }}
             >
               {label}
             </NavLink>
           ))}
         </nav>
 
-        {/* Spacer on mobile so gear stays right */}
         <div className="flex-1 md:hidden" />
 
-        {/* Gear icon — always visible, right side */}
+        {/* Codex icon */}
         <Link
           to="/settings"
-          title="Settings"
-          aria-label="Settings"
+          title={V.navSettings}
+          aria-label={V.navSettings}
           className="flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[var(--bg-elevated)]"
           style={{ color: 'var(--text-tertiary)' }}
         >
@@ -78,12 +78,10 @@ export default function AppShell({ children }: Props) {
         </Link>
       </header>
 
-      {/* Page content */}
       <main className="flex-1 w-full max-w-lg md:max-w-2xl mx-auto px-4 pt-4 pb-24 md:pb-8">
         {children}
       </main>
 
-      {/* Bottom nav — mobile only */}
       <div className="md:hidden">
         <BottomNav />
       </div>

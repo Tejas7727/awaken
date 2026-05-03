@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useStore } from '../lib/store';
+import { V } from '../lib/voice';
 import type { StatKey } from '../lib/schemas';
 
 const STAT_KEYS: StatKey[] = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA'];
@@ -9,11 +10,14 @@ export default function Settings() {
   const user = useStore((s) => s.user);
   const updateSettings = useStore((s) => s.updateSettings);
   const resetAllData = useStore((s) => s.resetAllData);
-
+  const signOut = useStore((s) => s.signOut);
   const connectGist = useStore((s) => s.connectGist);
   const pushToGist = useStore((s) => s.pushToGist);
   const syncStatus = useStore((s) => s.syncStatus);
   const lastSyncedAt = useStore((s) => s.lastSyncedAt);
+  const showArchivePrompt = useStore((s) => s.showArchivePrompt);
+  const dismissArchivePrompt = useStore((s) => s.dismissArchivePrompt);
+  const authSession = useStore((s) => s.authSession);
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [showPat, setShowPat] = useState(false);
@@ -46,26 +50,85 @@ export default function Settings() {
   };
 
   const syncLabel = syncStatus === 'syncing'
-    ? 'Syncing…'
+    ? 'Binding…'
     : lastSyncedAt
-    ? `Last synced ${new Date(lastSyncedAt).toLocaleString()}`
-    : 'Not yet synced';
+    ? `Bound ${new Date(lastSyncedAt).toLocaleString()}`
+    : 'Not yet bound';
+
+  const restDaysRemaining = user.restDaysRemaining ?? 2;
 
   return (
     <div>
-      <h1 className="text-lg font-medium font-display mb-5" style={{ color: 'var(--text-primary)' }}>
-        Settings
+      <h1
+        className="text-lg font-medium mb-5"
+        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}
+      >
+        {V.codexTitle}
       </h1>
 
-      {/* Rules */}
-      <SectionHeader>Quest rules</SectionHeader>
+      {/* Rest tokens */}
+      <SectionHeader>{V.restSection}</SectionHeader>
+      <div
+        className="rounded-lg px-4 py-3 mb-5 flex items-center justify-between"
+        style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+      >
+        <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+          {V.restTokens(restDaysRemaining)}
+        </span>
+        <span className="text-xs" style={{ color: 'var(--text-tertiary)' }}>Resets Monday</span>
+      </div>
+
+      {/* Archive prompt */}
+      {showArchivePrompt && (
+        <div
+          className="rounded-lg p-4 mb-5"
+          style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--accent-gold)' }}
+        >
+          <p className="text-sm mb-3" style={{ color: 'var(--text-primary)' }}>{V.archivePrompt}</p>
+          <div className="flex gap-2">
+            <button
+              onClick={dismissArchivePrompt}
+              className="flex-1 py-1.5 rounded-lg text-sm"
+              style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+            >
+              Not now
+            </button>
+            <button
+              onClick={() => { dismissArchivePrompt(); setShowPat(true); }}
+              className="flex-1 py-1.5 rounded-lg text-sm font-medium"
+              style={{ backgroundColor: 'var(--accent-gold)', color: 'var(--text-on-gold)' }}
+            >
+              {V.bindToCloud}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Theme */}
+      <SectionHeader>{V.themeSection}</SectionHeader>
+      <div className="flex gap-2 mb-5">
+        {(['dark', 'light'] as const).map((t) => {
+          const active = (settings.theme ?? 'dark') === t;
+          return (
+            <button
+              key={t}
+              onClick={() => updateSettings({ theme: t })}
+              className="flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-colors"
+              style={{
+                backgroundColor: active ? 'var(--accent-gold)' : 'var(--bg-elevated)',
+                color: active ? 'var(--text-on-gold)' : 'var(--text-secondary)',
+                border: `1px solid ${active ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
+              }}
+            >
+              {t === 'dark' ? V.themeDark : V.themeLight}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Quest rules */}
+      <SectionHeader>{V.questRulesSection}</SectionHeader>
       <div className="flex flex-col gap-1.5 mb-5">
-        <NumberRow
-          label="Daily quest count"
-          value={settings.dailyQuestCount}
-          min={1} max={8}
-          onChange={(v) => updateSettings({ dailyQuestCount: v })}
-        />
         <NumberRow
           label="Weekly quest count"
           value={settings.weeklyQuestCount}
@@ -73,7 +136,7 @@ export default function Settings() {
           onChange={(v) => updateSettings({ weeklyQuestCount: v })}
         />
         <NumberRow
-          label="Shadow quest every N days"
+          label="Shadow trial every N days"
           value={settings.shadowQuestEvery}
           min={1} max={14}
           onChange={(v) => updateSettings({ shadowQuestEvery: v })}
@@ -94,7 +157,7 @@ export default function Settings() {
       </div>
 
       {/* Focus areas */}
-      <SectionHeader>Focus areas</SectionHeader>
+      <SectionHeader>{V.focusAreasSection}</SectionHeader>
       <div className="flex flex-wrap gap-2 mb-5">
         {STAT_KEYS.map((stat) => {
           const active = settings.focusAreas.includes(stat);
@@ -104,9 +167,10 @@ export default function Settings() {
               onClick={() => handleToggleFocus(stat)}
               className="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
               style={{
-                backgroundColor: active ? 'var(--accent-cyan)' : 'var(--bg-elevated)',
-                color: active ? 'var(--bg-base)' : 'var(--text-secondary)',
-                border: `1px solid ${active ? 'var(--accent-cyan)' : 'var(--border-subtle)'}`,
+                backgroundColor: active ? 'var(--accent-gold)' : 'var(--bg-elevated)',
+                color: active ? 'var(--text-on-gold)' : 'var(--text-secondary)',
+                border: `1px solid ${active ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
+                fontFamily: 'var(--font-numeric)',
               }}
             >
               {stat}
@@ -115,46 +179,23 @@ export default function Settings() {
         })}
       </div>
 
-      {/* Theme accent */}
-      <SectionHeader>Theme accent</SectionHeader>
-      <div className="flex gap-2 mb-5">
-        {(['cyan', 'magenta', 'gold'] as const).map((accent) => {
-          const active = settings.themeAccent === accent;
-          const color = accent === 'cyan' ? 'var(--accent-cyan)' : accent === 'magenta' ? 'var(--accent-magenta)' : 'var(--accent-gold)';
-          return (
-            <button
-              key={accent}
-              onClick={() => updateSettings({ themeAccent: accent })}
-              className="flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-colors"
-              style={{
-                backgroundColor: active ? color : 'var(--bg-elevated)',
-                color: active ? 'var(--bg-base)' : color,
-                border: `1px solid ${color}`,
-              }}
-            >
-              {accent}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* GitHub PAT */}
-      <SectionHeader>GitHub sync</SectionHeader>
+      {/* Chronicle sync */}
+      <SectionHeader>{V.syncSection}</SectionHeader>
       <div
-        className="rounded-xl p-4 mb-5"
+        className="rounded-lg p-4 mb-5"
         style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
       >
         {settings.githubToken ? (
           <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between">
               <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                {settings.gistId ? 'Gist linked' : 'PAT saved — no gist yet'}
+                {settings.gistId ? 'Chronicle bound' : 'PAT saved — no chronicle yet'}
               </span>
               <span
                 className="text-xs"
-                style={{ color: syncStatus === 'error' ? 'var(--accent-magenta)' : 'var(--text-tertiary)' }}
+                style={{ color: syncStatus === 'error' ? 'var(--accent-ember)' : 'var(--text-tertiary)' }}
               >
-                {syncStatus === 'error' ? 'Sync error' : syncLabel}
+                {syncStatus === 'error' ? 'Bind failed' : syncLabel}
               </span>
             </div>
             <div className="flex gap-2">
@@ -164,16 +205,16 @@ export default function Settings() {
                 className="flex-1 py-1.5 rounded-lg text-sm font-medium"
                 style={{
                   backgroundColor: 'var(--bg-elevated)',
-                  color: syncStatus === 'syncing' ? 'var(--text-tertiary)' : 'var(--accent-cyan)',
+                  color: syncStatus === 'syncing' ? 'var(--text-tertiary)' : 'var(--accent-gold)',
                   border: '1px solid var(--border-subtle)',
                 }}
               >
-                {syncStatus === 'syncing' ? 'Syncing…' : 'Sync now'}
+                {syncStatus === 'syncing' ? 'Binding…' : 'Bind now'}
               </button>
               <button
                 onClick={handleRevokePat}
                 className="flex-1 py-1.5 rounded-lg text-sm"
-                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-magenta)', border: '1px solid var(--border-subtle)' }}
+                style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-ember)', border: '1px solid var(--border-subtle)' }}
               >
                 Revoke and clear
               </button>
@@ -197,7 +238,7 @@ export default function Settings() {
               <button onClick={() => setShowPat(false)} className="flex-1 py-1.5 rounded-lg text-sm" style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}>
                 Cancel
               </button>
-              <button onClick={handleSavePat} className="flex-1 py-1.5 rounded-lg text-sm font-medium" style={{ backgroundColor: 'var(--accent-cyan)', color: 'var(--bg-base)' }}>
+              <button onClick={handleSavePat} className="flex-1 py-1.5 rounded-lg text-sm font-medium" style={{ backgroundColor: 'var(--accent-gold)', color: 'var(--text-on-gold)' }}>
                 Save PAT
               </button>
             </div>
@@ -213,28 +254,48 @@ export default function Settings() {
         )}
       </div>
 
-      {/* Account info */}
-      <SectionHeader>Account</SectionHeader>
+      {/* Account */}
+      <SectionHeader>{V.accountSection}</SectionHeader>
       <div className="flex flex-col gap-1.5 mb-5">
         <InfoRow label="Name" value={user.name} />
-        <InfoRow label="Started" value={new Date(user.startedAt).toLocaleDateString()} />
-        <InfoRow label="Player level" value={String(user.playerLevel)} />
+        <InfoRow label="Climbing since" value={new Date(user.startedAt).toLocaleDateString()} />
+        <InfoRow label="Level" value={String(user.playerLevel)} />
       </div>
 
+      {/* Leave the Tower */}
+      {authSession && (
+        <>
+          <SectionHeader>Session</SectionHeader>
+          <button
+            onClick={() => signOut()}
+            className="w-full py-3 rounded-lg text-sm font-medium mb-5"
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-subtle)',
+              fontFamily: 'var(--font-display)',
+              letterSpacing: '0.06em',
+            }}
+          >
+            {V.leaveTheTower}
+          </button>
+        </>
+      )}
+
       {/* Danger zone */}
-      <SectionHeader>Danger zone</SectionHeader>
+      <SectionHeader>{V.dangerSection}</SectionHeader>
       {!confirmReset ? (
         <button
           onClick={() => setConfirmReset(true)}
-          className="w-full py-3 rounded-xl text-sm font-medium"
-          style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-magenta)', border: '1px solid var(--accent-magenta)' }}
+          className="w-full py-3 rounded-lg text-sm font-medium"
+          style={{ backgroundColor: 'var(--bg-elevated)', color: 'var(--accent-ember)', border: '1px solid var(--accent-ember)' }}
         >
-          Reset all data
+          {V.resetAllData}
         </button>
       ) : (
-        <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--accent-magenta)' }}>
+        <div className="rounded-lg p-4" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--accent-ember)' }}>
           <p className="text-sm mb-3 text-center" style={{ color: 'var(--text-primary)' }}>
-            This will delete all progress and re-seed the app. Are you sure?
+            {V.resetConfirmMsg}
           </p>
           <div className="flex gap-2">
             <button
@@ -247,9 +308,9 @@ export default function Settings() {
             <button
               onClick={async () => { await resetAllData(); setConfirmReset(false); }}
               className="flex-1 py-2 rounded-lg text-sm font-medium"
-              style={{ backgroundColor: 'var(--accent-magenta)', color: 'var(--bg-base)' }}
+              style={{ backgroundColor: 'var(--accent-ember)', color: '#F4EDDA' }}
             >
-              Yes, reset everything
+              {V.resetConfirmYes}
             </button>
           </div>
         </div>
@@ -262,7 +323,7 @@ export default function Settings() {
 
 function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <p className="text-xs font-medium mb-2 mt-1 uppercase tracking-wide" style={{ color: 'var(--text-tertiary)' }}>
+    <p className="text-xs font-medium mb-2 mt-1 uppercase tracking-wide" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)' }}>
       {children}
     </p>
   );
@@ -271,11 +332,11 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div
-      className="flex items-center justify-between rounded-xl px-4 py-3"
+      className="flex items-center justify-between rounded-lg px-4 py-3"
       style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
     >
-      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{label}</span>
-      <span className="text-sm font-medium font-display" style={{ color: 'var(--text-primary)' }}>{value}</span>
+      <span className="text-sm" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>{label}</span>
+      <span className="text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>{value}</span>
     </div>
   );
 }
@@ -292,10 +353,10 @@ interface NumberRowProps {
 function NumberRow({ label, value, min, max, onChange }: NumberRowProps) {
   return (
     <div
-      className="flex items-center justify-between rounded-xl px-4 py-3"
+      className="flex items-center justify-between rounded-lg px-4 py-3"
       style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
     >
-      <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{label}</span>
+      <span className="text-sm" style={{ color: 'var(--text-secondary)', fontFamily: 'var(--font-body)' }}>{label}</span>
       <div className="flex items-center gap-2">
         <button
           onClick={() => onChange(Math.max(min, value - 1))}
@@ -304,7 +365,7 @@ function NumberRow({ label, value, min, max, onChange }: NumberRowProps) {
         >
           −
         </button>
-        <span className="text-sm font-medium font-display w-5 text-center" style={{ color: 'var(--text-primary)' }}>
+        <span className="text-sm font-medium w-5 text-center" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-numeric)' }}>
           {value}
         </span>
         <button

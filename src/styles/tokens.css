@@ -1,26 +1,86 @@
 :root {
-  --bg-base: #07090E;
-  --bg-surface: #0F1218;
-  --bg-elevated: #161A22;
-  --border-subtle: rgba(255,255,255,0.06);
-  --border-strong: rgba(255,255,255,0.12);
+  /* Dark mode (default) — Tower at night */
+  --bg-base: #0F0A06;
+  --bg-surface: #1A1410;
+  --bg-elevated: #2B1F15;
+  --bg-glow: rgba(212, 165, 83, 0.06);
 
-  --accent-cyan: #4DE9FF;
-  --accent-magenta: #FF4DCB;
-  --accent-gold: #FFD24D;
+  --border-subtle: rgba(212, 165, 83, 0.12);
+  --border-strong: rgba(212, 165, 83, 0.28);
+  --border-bronze: #B8924A;
 
-  --stat-str: #FF8C6B;
-  --stat-agi: #4DE9C5;
-  --stat-vit: #6BFF8C;
-  --stat-int: #6B8CFF;
-  --stat-wis: #B86BFF;
-  --stat-cha: #FF6BB8;
+  --accent-gold: #D4A553;
+  --accent-gold-bright: #E8C168;
+  --accent-bronze: #B8924A;
+  --accent-ember: #C9663C;
 
-  --text-primary: #E8EAF0;
-  --text-secondary: rgba(232,234,240,0.65);
-  --text-tertiary: rgba(232,234,240,0.4);
+  --text-primary: #E8DCC4;
+  --text-secondary: rgba(232, 220, 196, 0.65);
+  --text-tertiary: rgba(232, 220, 196, 0.4);
+  --text-on-gold: #1A1410;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* Stat colors — earth-toned */
+  --stat-str: #C9663C;
+  --stat-agi: #8FA68A;
+  --stat-vit: #B8A05B;
+  --stat-int: #6B7FA0;
+  --stat-wis: #9D7BA8;
+  --stat-cha: #C49080;
+
+  --rarity-common: #8C7355;
+  --rarity-rare: #6B7FA0;
+  --rarity-epic: #9D7BA8;
+  --rarity-legendary: #D4A553;
+  --rarity-mythic: #C9663C;
+
+  --difficulty-F: #6B5D45;
+  --difficulty-E: #8C7355;
+  --difficulty-D: #B8924A;
+  --difficulty-C: #D4A553;
+  --difficulty-B: #E8C168;
+  --difficulty-A: #C9663C;
+  --difficulty-S: #9D7BA8;
+  --difficulty-Spp: #E8DCC4;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --font-display: 'Cinzel', Georgia, serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+  --font-numeric: 'Space Grotesk Variable', 'Space Grotesk', system-ui, sans-serif;
+}
+
+[data-theme="light"] {
+  --bg-base: #F4EDDA;
+  --bg-surface: #ECE2C5;
+  --bg-elevated: #E0D2A8;
+  --bg-glow: rgba(140, 111, 63, 0.06);
+
+  --border-subtle: rgba(58, 46, 28, 0.12);
+  --border-strong: rgba(58, 46, 28, 0.28);
+  --border-bronze: #8C6F3F;
+
+  --accent-gold: #8C6F3F;
+  --accent-gold-bright: #B8924A;
+  --accent-bronze: #5C4A2A;
+  --accent-ember: #A04428;
+
+  --text-primary: #3A2E1C;
+  --text-secondary: rgba(58, 46, 28, 0.65);
+  --text-tertiary: rgba(58, 46, 28, 0.4);
+  --text-on-gold: #F4EDDA;
+
+  --stat-str: #A04428;
+  --stat-agi: #5A7355;
+  --stat-vit: #8C6F3F;
+  --stat-int: #4A5A78;
+  --stat-wis: #6E5478;
+  --stat-cha: #95604F;
+
+  --rarity-common: #6B5030;
+  --rarity-rare: #4A5A78;
+  --rarity-epic: #6E5478;
+  --rarity-legendary: #8C6F3F;
+  --rarity-mythic: #A04428;
 }

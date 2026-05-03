@@ -3,15 +3,19 @@ import { z } from 'zod';
 export const StatKey = z.enum(['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA']);
 export type StatKey = z.infer<typeof StatKey>;
 
-export const Rank = z.enum(['E', 'D', 'C', 'B', 'A', 'S', 'SS', 'SSS']);
+export const Rank = z.enum(['F', 'E', 'D', 'C', 'B', 'A', 'S', 'S++']);
 export type Rank = z.infer<typeof Rank>;
 
 export const QuestType = z.enum(['daily', 'weekly', 'shadow', 'side', 'boss']);
 export type QuestType = z.infer<typeof QuestType>;
 
+export const DifficultyKey = z.enum(['F', 'E', 'D', 'C', 'B', 'A', 'S', 'S++']);
+export type DifficultyKey = z.infer<typeof DifficultyKey>;
+
 export const Quest = z.object({
   id: z.string().min(1),
   type: QuestType,
+  difficulty: DifficultyKey.optional(),
   title: z.string().min(1).max(80),
   description: z.string().max(200).optional(),
   stats: z.record(StatKey, z.number().int().min(0).max(200)),
@@ -19,7 +23,7 @@ export const Quest = z.object({
   tags: z.array(z.string()).default([]),
   createdAt: z.string().datetime(),
   expiresAt: z.string().datetime().nullable(),
-  source: z.enum(['seed', 'llm', 'user']).default('user'),
+  source: z.enum(['seed', 'llm', 'user', 'admin']).default('user'),
 });
 export type Quest = z.infer<typeof Quest>;
 
@@ -53,21 +57,22 @@ export type StoryNode = z.infer<typeof StoryNode>;
 
 export const Settings = z.object({
   rolloverHour: z.number().int().min(0).max(23).default(4),
-  dailyQuestCount: z.number().int().min(1).max(8).default(4),
+  dailyQuestCount: z.number().int().min(1).max(8).default(5),
   weeklyQuestCount: z.number().int().min(0).max(4).default(2),
   shadowQuestEvery: z.number().int().min(1).max(14).default(3),
   minStatsCovered: z.number().int().min(1).max(6).default(4),
   focusAreas: z.array(StatKey).default([]),
   githubToken: z.string().optional(),
   gistId: z.string().optional(),
-  themeAccent: z.enum(['cyan', 'magenta', 'gold']).default('cyan'),
+  archiveGistId: z.string().optional(),
+  theme: z.enum(['dark', 'light']).default('dark'),
 });
 export type Settings = z.infer<typeof Settings>;
 
 export const UserState = z.object({
   name: z.string().default('Awakened'),
   startedAt: z.string().datetime(),
-  rank: Rank.default('E'),
+  rank: z.string().default('F'),
   playerLevel: z.number().int().min(1).default(1),
   totalXp: z.number().int().min(0).default(0),
   stats: z.record(StatKey, z.number().int().min(1)).default({ STR: 1, AGI: 1, VIT: 1, INT: 1, WIS: 1, CHA: 1 }),
@@ -76,11 +81,13 @@ export const UserState = z.object({
   lastActiveDay: z.string().nullable(),
   currentChapter: z.number().int().min(1).default(1),
   earnedTitleIds: z.array(z.string()).default([]),
+  restDaysRemaining: z.number().int().min(0).max(2).default(2),
+  restDaysResetsOn: z.string().nullable().default(null),
 });
 export type UserState = z.infer<typeof UserState>;
 
 export const LLMQuestImport = z.object({
-  quests: z.array(Quest.omit({ createdAt: true, expiresAt: true, source: true })).min(1).max(10),
+  quests: z.array(Quest.omit({ createdAt: true, expiresAt: true, source: true })).min(1).max(12),
   storyBeat: z.string().max(400).nullable().optional(),
   titleAward: z.object({
     id: z.string(),
@@ -96,7 +103,7 @@ export const DailyExport = z.object({
   state: z.object({
     date: z.string(),
     dayCount: z.number().int(),
-    rank: Rank,
+    rank: z.string(),
     playerLevel: z.number().int(),
     stats: z.record(StatKey, z.number().int()),
     streak: z.number().int(),

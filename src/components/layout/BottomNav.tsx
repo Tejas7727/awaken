@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
+import { V } from '../../lib/voice';
 
 const NAV_ITEMS = [
-  { to: '/',         label: 'Home',     icon: '⌂' },
-  { to: '/quests',   label: 'Quests',   icon: '⚔' },
-  { to: '/stats',    label: 'Stats',    icon: '◈' },
-  { to: '/story',    label: 'Story',    icon: '📖' },
-  { to: '/progress', label: 'Progress', icon: '▦' },
+  { to: '/',         label: V.navHome,     icon: '⌂' },
+  { to: '/quests',   label: V.navQuests,   icon: '⚔' },
+  { to: '/stats',    label: V.navStats,    icon: '◈' },
+  { to: '/story',    label: V.navStory,    icon: '📖' },
+  { to: '/progress', label: V.navProgress, icon: '▦' },
 ];
 
 export default function BottomNav() {
@@ -14,7 +15,7 @@ export default function BottomNav() {
       className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto flex items-center justify-around h-16 px-2"
       style={{
         backgroundColor: 'var(--bg-surface)',
-        borderTop: '1px solid var(--border-subtle)',
+        borderTop: '0.5px solid var(--border-subtle)',
       }}
     >
       {NAV_ITEMS.map(({ to, label, icon }) => (
@@ -25,10 +26,11 @@ export default function BottomNav() {
           className={({ isActive }) =>
             `flex flex-col items-center gap-0.5 px-3 py-1 rounded-lg text-xs font-medium transition-colors ${
               isActive
-                ? 'text-[var(--accent-cyan)]'
+                ? 'text-[var(--accent-gold)]'
                 : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
             }`
           }
+          style={{ fontFamily: 'var(--font-body)' }}
         >
           <span className="text-lg leading-none">{icon}</span>
           <span>{label}</span>

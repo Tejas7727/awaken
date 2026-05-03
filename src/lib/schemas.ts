@@ -18,6 +18,7 @@ export const Quest = z.object({
   difficulty: DifficultyKey.optional(),
   title: z.string().min(1).max(80),
   description: z.string().max(200).optional(),
+  instruction: z.string().max(120).optional(),
   stats: z.record(StatKey, z.number().int().min(0).max(200)),
   xp: z.number().int().min(0).max(500),
   tags: z.array(z.string()).default([]),
@@ -65,7 +66,6 @@ export const Settings = z.object({
   githubToken: z.string().optional(),
   gistId: z.string().optional(),
   archiveGistId: z.string().optional(),
-  theme: z.enum(['dark', 'light']).default('dark'),
 });
 export type Settings = z.infer<typeof Settings>;
 

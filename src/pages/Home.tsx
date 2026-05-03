@@ -15,6 +15,7 @@ export default function Home() {
   const restDay = useStore((s) => s.restDay);
   const todayCompletedIds = useStore((s) => s.todayCompletedIds);
   const loading = useStore((s) => s.loading);
+  const isAdmin = useStore((s) => s.isAdmin);
 
   const [restConfirm, setRestConfirm] = useState(false);
 
@@ -98,18 +99,20 @@ export default function Home() {
         </div>
       )}
 
-      <button
-        onClick={exportDailyPack}
-        className="w-full mt-3 py-3 rounded-lg text-sm font-medium transition-opacity active:scale-95"
-        style={{
-          backgroundColor: 'var(--bg-elevated)',
-          border: '1px solid var(--border-strong)',
-          color: 'var(--accent-gold)',
-          fontFamily: 'var(--font-body)',
-        }}
-      >
-        {V.sealTheDay} → export ↗
-      </button>
+      {isAdmin && (
+        <button
+          onClick={exportDailyPack}
+          className="w-full mt-3 py-3 rounded-lg text-sm font-medium transition-opacity active:scale-95"
+          style={{
+            backgroundColor: 'var(--bg-elevated)',
+            border: '1px solid var(--border-strong)',
+            color: 'var(--accent-gold)',
+            fontFamily: 'var(--font-body)',
+          }}
+        >
+          {V.sealTheDay} → export ↗
+        </button>
+      )}
     </div>
   );
 }

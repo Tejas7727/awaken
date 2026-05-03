@@ -136,6 +136,12 @@ export default function QuestCard({ quest }: Props) {
             {quest.description}
           </p>
         )}
+        {/* Instruction — measurable task, slightly more muted */}
+        {quest.instruction && (
+          <p className="text-xs mt-0.5 leading-relaxed" style={{ color: 'rgba(232,220,196,0.3)', fontFamily: 'var(--font-body)', fontStyle: 'italic' }}>
+            {quest.instruction}
+          </p>
+        )}
 
         {/* Stat chips */}
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">

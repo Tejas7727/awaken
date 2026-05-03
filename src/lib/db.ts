@@ -30,7 +30,6 @@ export interface SettingsRow {
   githubToken?: string;
   gistId?: string;
   archiveGistId?: string;
-  theme: 'dark' | 'light';
 }
 
 interface StatDailyRow {
@@ -66,8 +65,6 @@ export class AwakenDB extends Dexie {
       settings: 'id',
       syncLog: 'id, syncedAt',
     });
-    // Version 2: adds restDaysRemaining, restDaysResetsOn, archiveGistId, theme
-    // Dexie does not require schema change for non-indexed fields, handled with defaults
     this.version(2).stores({
       user: 'id',
       quests: 'id, type, source, expiresAt',
@@ -82,10 +79,17 @@ export class AwakenDB extends Dexie {
         if (row.restDaysRemaining === undefined) row.restDaysRemaining = 2;
         if (row.restDaysResetsOn === undefined) row.restDaysResetsOn = null;
       });
-      await tx.table('settings').toCollection().modify((row) => {
-        if (row.theme === undefined) row.theme = 'dark';
-        if (row.archiveGistId === undefined) row.archiveGistId = undefined;
-      });
+    });
+    // Version 3: quest instruction field, remove theme from settings (non-indexed — no schema diff needed)
+    this.version(3).stores({
+      user: 'id',
+      quests: 'id, type, source, expiresAt',
+      completions: 'id, questId, effectiveDay, completedAt',
+      stats_daily: '[day+stat], day, stat',
+      stories: 'id, chapter, unlockedAt',
+      titles: 'id, earnedAt',
+      settings: 'id',
+      syncLog: 'id, syncedAt',
     });
   }
 }

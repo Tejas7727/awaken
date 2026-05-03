@@ -104,28 +104,6 @@ export default function Settings() {
         </div>
       )}
 
-      {/* Theme */}
-      <SectionHeader>{V.themeSection}</SectionHeader>
-      <div className="flex gap-2 mb-5">
-        {(['dark', 'light'] as const).map((t) => {
-          const active = (settings.theme ?? 'dark') === t;
-          return (
-            <button
-              key={t}
-              onClick={() => updateSettings({ theme: t })}
-              className="flex-1 py-2 rounded-lg text-sm font-medium capitalize transition-colors"
-              style={{
-                backgroundColor: active ? 'var(--accent-gold)' : 'var(--bg-elevated)',
-                color: active ? 'var(--text-on-gold)' : 'var(--text-secondary)',
-                border: `1px solid ${active ? 'var(--accent-gold)' : 'var(--border-subtle)'}`,
-              }}
-            >
-              {t === 'dark' ? V.themeDark : V.themeLight}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Quest rules */}
       <SectionHeader>{V.questRulesSection}</SectionHeader>
       <div className="flex flex-col gap-1.5 mb-5">

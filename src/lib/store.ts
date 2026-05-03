@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { Session } from '@supabase/supabase-js';
 import { db } from './db';
-import { seedIfEmpty } from './seed';
+import { seedIfEmpty, backfillSeedQuests, seedQuestsToSupabase, seedTitlesToSupabase } from './seed';
 import { computeRank, computePlayerLevel, statXpToLevel } from './progression';
 import { getEffectiveDay } from './time';
 import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type StoryNode, type Title, type UserState } from './schemas';
@@ -75,6 +75,7 @@ interface AwakenState {
   authSession: Session | null;
   authLoading: boolean;
   isLegacyUser: boolean;
+  isAdmin: boolean;
 
   initAuth: () => Promise<void>;
   signIn: (playerName: string, password: string) => Promise<string | null>;
@@ -131,6 +132,7 @@ export const useStore = create<AwakenState>((set, get) => ({
   authSession: null,
   authLoading: true,
   isLegacyUser: false,
+  isAdmin: false,
 
   showToast: (msg) => {
     set({ toast: msg });
@@ -141,6 +143,7 @@ export const useStore = create<AwakenState>((set, get) => ({
 
   init: async () => {
     await seedIfEmpty();
+    await backfillSeedQuests();
     const [userRow, settingsRow, quests, completions, stories, titles, statHistory, syncLog] = await Promise.all([
       db.user.get('me'),
       db.settings.get('settings'),
@@ -171,9 +174,6 @@ export const useStore = create<AwakenState>((set, get) => ({
       loading: false,
       lastSyncedAt: syncLog?.syncedAt ?? null,
     });
-
-    // Apply theme to document
-    document.documentElement.setAttribute('data-theme', settings.theme ?? 'dark');
 
     await get().runRolloverCheck();
     get().pullCheckOnLaunch();
@@ -253,9 +253,11 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     const ctx = { morningCompletions, shadowCompletions };
     const newEarnedTitleIds = [...updatedUser.earnedTitleIds];
+    const newlyEarnedTitleIds: string[] = [];
     for (const rule of TITLE_RULES) {
       if (!newEarnedTitleIds.includes(rule.id) && rule.rule(updatedUser, ctx)) {
         newEarnedTitleIds.push(rule.id);
+        newlyEarnedTitleIds.push(rule.id);
         const titleRow = await db.titles.get(rule.id);
         if (titleRow) {
           await db.titles.put({ ...titleRow, earnedAt: now.toISOString() });
@@ -263,6 +265,20 @@ export const useStore = create<AwakenState>((set, get) => ({
       }
     }
     updatedUser.earnedTitleIds = newEarnedTitleIds;
+
+    // Write system whispers to Supabase for each newly earned title
+    const { authSession } = get();
+    if (isSupabaseConfigured && authSession && newlyEarnedTitleIds.length > 0) {
+      const whisperRows = newlyEarnedTitleIds.map((id) => {
+        const rule = TITLE_RULES.find((r) => r.id === id);
+        return {
+          user_id: authSession.user.id,
+          body: rule ? `Title earned: ${rule.name} — ${rule.desc}` : `Title earned: ${id}`,
+          kind: 'system' as const,
+        };
+      });
+      void supabase.from('whispers').insert(whisperRows);
+    }
 
     // I/O boundary — Dexie row type differs from domain type
     await db.user.put({ id: 'me', ...updatedUser } as unknown as import('./db').UserStateRow);
@@ -576,10 +592,6 @@ export const useStore = create<AwakenState>((set, get) => ({
     // I/O boundary
     await db.settings.put({ id: 'settings', ...updated } as unknown as import('./db').SettingsRow);
     set({ settings: updated });
-    // Apply theme change immediately
-    if (partial.theme) {
-      document.documentElement.setAttribute('data-theme', partial.theme);
-    }
   },
 
   resetAllData: async () => {
@@ -643,13 +655,24 @@ export const useStore = create<AwakenState>((set, get) => ({
       return;
     }
 
+    // One-shot migration: clear stale IndexedDB so local state matches server reset
+    const resetKey = 'awaken_reset_v2';
+    if (!localStorage.getItem(resetKey)) {
+      await Promise.all([
+        db.user.clear(), db.quests.clear(), db.completions.clear(),
+        db.stats_daily.clear(), db.stories.clear(), db.titles.clear(),
+        db.settings.clear(), db.syncLog.clear(),
+      ]);
+      localStorage.setItem(resetKey, '1');
+    }
+
     supabase.auth.onAuthStateChange((_event, session) => {
       set({ authSession: session });
       if (!session) {
         set({
           user: null, settings: null, quests: [], completions: [],
           stories: [], titles: [], todayCompletedIds: new Set(),
-          statHistory: [], loading: true, isLegacyUser: false,
+          statHistory: [], loading: true, isLegacyUser: false, isAdmin: false,
         });
       }
     });
@@ -660,7 +683,33 @@ export const useStore = create<AwakenState>((set, get) => ({
       return;
     }
 
+    // Server-side validation — getSession() trusts the local token; getUser() verifies with Supabase
+    const { data: { user: serverUser }, error: userError } = await supabase.auth.getUser();
+    if (userError || !serverUser) {
+      // Deleted account or invalid token — clear local session and route to cold open
+      await supabase.auth.signOut({ scope: 'local' });
+      await Promise.all([
+        db.user.clear(), db.quests.clear(), db.completions.clear(),
+        db.stats_daily.clear(), db.stories.clear(), db.titles.clear(),
+        db.settings.clear(), db.syncLog.clear(),
+      ]);
+      set({ authLoading: false, authSession: null, isAdmin: false });
+      return;
+    }
+
     set({ authSession: session });
+
+    // Fetch admin flag from profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', session.user.id)
+      .single();
+    set({ isAdmin: profile?.is_admin ?? false });
+
+    // Seed Supabase tables (idempotent)
+    seedTitlesToSupabase();
+    seedQuestsToSupabase(session.user.id);
 
     const localUser = await db.user.get('me');
     if (localUser && !localUser.cloudUserId) {
@@ -682,6 +731,18 @@ export const useStore = create<AwakenState>((set, get) => ({
     if (!data.session) return 'Sign-in failed — try again';
 
     set({ authSession: data.session });
+
+    // Fetch admin flag
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('is_admin')
+      .eq('id', data.user.id)
+      .single();
+    set({ isAdmin: profile?.is_admin ?? false });
+
+    // Seed Supabase tables (idempotent)
+    seedTitlesToSupabase();
+    seedQuestsToSupabase(data.user.id);
 
     const localUser = await db.user.get('me');
     if (!localUser) {

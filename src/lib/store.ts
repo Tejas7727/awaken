@@ -8,7 +8,7 @@ import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type S
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
 import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, pushArchiveToGist, type GistSnapshot } from './github';
-import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError } from './supabase';
+import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError, fetchProfile } from './supabase';
 import { V } from './voice';
 
 const DAILY_CAP = 5;
@@ -699,13 +699,9 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     set({ authSession: session });
 
-    // Fetch admin flag from profile
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', session.user.id)
-      .single();
-    set({ isAdmin: profile?.is_admin ?? false });
+    // Fetch full profile row — select('*') so no column is ever silently skipped
+    const profile = await fetchProfile(session.user.id);
+    set({ isAdmin: profile?.isAdmin ?? false });
 
     // Seed Supabase tables (idempotent)
     seedTitlesToSupabase();
@@ -733,13 +729,9 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     set({ authSession: data.session });
 
-    // Fetch admin flag
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('is_admin')
-      .eq('id', data.user.id)
-      .single();
-    set({ isAdmin: profile?.is_admin ?? false });
+    // Fetch full profile row — select('*') so no column is ever silently skipped
+    const profile = await fetchProfile(data.user.id);
+    set({ isAdmin: profile?.isAdmin ?? false });
 
     // Seed Supabase tables (idempotent)
     seedTitlesToSupabase();

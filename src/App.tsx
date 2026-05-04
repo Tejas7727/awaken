@@ -64,10 +64,13 @@ function Dashboard() {
   const dismissToast = useStore((s) => s.dismissToast);
   const pushToGist = useStore((s) => s.pushToGist);
   const loadWhispers = useStore((s) => s.loadWhispers);
+  const subscribeAdminQuests = useStore((s) => s.subscribeAdminQuests);
 
   useEffect(() => {
     loadWhispers();
-  }, [loadWhispers]);
+    const unsub = subscribeAdminQuests();
+    return unsub;
+  }, [loadWhispers, subscribeAdminQuests]);
 
   useEffect(() => {
     const id = setInterval(() => { runRolloverCheck(); }, 60_000);

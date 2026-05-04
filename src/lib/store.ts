@@ -132,6 +132,12 @@ interface AwakenState {
     avoidances: string[];
     gender: string;
   }) => Promise<void>;
+
+  // Admin quest delivery (realtime)
+  subscribeAdminQuests: () => () => void;
+
+  // Leaderboard opt-out
+  setLeaderboardOptout: (optout: boolean) => Promise<void>;
 }
 
 let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -985,6 +991,57 @@ export const useStore = create<AwakenState>((set, get) => ({
     if (error) { console.error('[awaken] completeOnboarding:', error.message); return; }
     const updated = await fetchProfile(authSession.user.id);
     set({ needsOnboarding: false, cloudProfile: updated });
+  },
+
+  // ── Admin quest delivery ───────────────────────────────────────────────────
+
+  subscribeAdminQuests: () => {
+    const { authSession } = get();
+    if (!isSupabaseConfigured || !authSession) return () => {};
+    const channel = supabase
+      .channel('admin-quests')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'quests',
+        filter: `user_id=eq.${authSession.user.id}`,
+      }, async (payload) => {
+        const row = payload.new as Record<string, unknown>;
+        // Map Supabase snake_case quest row to app Quest schema
+        const quest: import('./schemas').Quest = {
+          id: row.id as string,
+          type: row.type as import('./schemas').Quest['type'],
+          difficulty: (row.difficulty as import('./schemas').Quest['difficulty']) ?? undefined,
+          title: row.title as string,
+          description: (row.prose as string) ?? undefined,
+          instruction: (row.instruction as string) ?? undefined,
+          stats: row.stats as Record<string, number>,
+          xp: row.xp as number,
+          tags: (row.tags as string[]) ?? [],
+          createdAt: row.created_at as string,
+          expiresAt: null,
+          source: 'admin' as const,
+        };
+        await db.quests.put(quest);
+        const quests = await db.quests.toArray();
+        set({ quests });
+        get().showToast('New quest pack from the Quest Master.');
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  },
+
+  // ── Leaderboard opt-out ────────────────────────────────────────────────────
+
+  setLeaderboardOptout: async (optout: boolean) => {
+    const { authSession } = get();
+    if (!isSupabaseConfigured || !authSession) return;
+    const { error } = await supabase
+      .from('profiles')
+      .update({ leaderboard_optout: optout, updated_at: new Date().toISOString() })
+      .eq('id', authSession.user.id);
+    if (error) { console.error('[awaken] setLeaderboardOptout:', error.message); return; }
+    set((s) => ({ cloudProfile: s.cloudProfile ? { ...s.cloudProfile, leaderboardOptout: optout } : null }));
   },
 
   connectGist: async (token: string) => {

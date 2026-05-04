@@ -21,6 +21,8 @@ export default function Settings() {
   const dismissArchivePrompt = useStore((s) => s.dismissArchivePrompt);
   const authSession = useStore((s) => s.authSession);
   const isAdmin = useStore((s) => s.isAdmin);
+  const cloudProfile = useStore((s) => s.cloudProfile);
+  const setLeaderboardOptout = useStore((s) => s.setLeaderboardOptout);
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [showPat, setShowPat] = useState(false);
@@ -295,6 +297,33 @@ export default function Settings() {
           >
             {V.leaveTheTower}
           </button>
+        </>
+      )}
+
+      {/* Leaderboard */}
+      {authSession && (
+        <>
+          <SectionHeader>Tower presence</SectionHeader>
+          <div
+            className="rounded-lg px-4 py-3 mb-5 flex items-center justify-between"
+            style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+          >
+            <div>
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>Appear on the Tower</p>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)' }}>Your absence is not announced.</p>
+            </div>
+            <button
+              onClick={() => setLeaderboardOptout(!cloudProfile?.leaderboardOptout)}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                backgroundColor: cloudProfile?.leaderboardOptout ? 'var(--bg-elevated)' : 'var(--accent-gold)',
+                color: cloudProfile?.leaderboardOptout ? 'var(--text-tertiary)' : 'var(--text-on-gold)',
+                border: `1px solid ${cloudProfile?.leaderboardOptout ? 'var(--border-strong)' : 'var(--accent-gold)'}`,
+              }}
+            >
+              {cloudProfile?.leaderboardOptout ? 'Hidden' : 'Visible'}
+            </button>
+          </div>
         </>
       )}
 

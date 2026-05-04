@@ -713,9 +713,10 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     const localUser = await db.user.get('me');
     if (localUser && !localUser.cloudUserId) {
-      set({ authLoading: false, isLegacyUser: true });
-      await get().init();
-      return;
+      // If the user is already authenticated server-side, just stamp cloudUserId and proceed.
+      // The legacy migration path is only for pre-Phase-5 users with real offline data who
+      // have never signed up. Post-reset everyone has a valid session, so skip Migrate.
+      await db.user.put({ ...localUser, cloudUserId: session.user.id });
     }
 
     await get().init();

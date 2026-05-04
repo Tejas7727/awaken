@@ -8,9 +8,9 @@ const TOTAL_STEPS = 5;
 const FOCUS_OPTIONS = ['Strength', 'Endurance', 'Mobility', 'Recovery', 'None of these'];
 const AVOID_OPTIONS = ['Solitude', 'Discomfort', 'Vulnerability', 'Failure', 'None of these'];
 const GENDER_OPTIONS = [
-  { value: 'he',     label: 'He / Him' },
-  { value: 'she',    label: 'She / Her' },
-  { value: 'they',   label: 'They / Them' },
+  { value: 'male',       label: 'He / Him' },
+  { value: 'female',     label: 'She / Her' },
+  { value: 'nonbinary',  label: 'They / Them' },
   { value: 'prefer_not', label: 'Prefer not to say' },
 ];
 
@@ -52,7 +52,7 @@ export default function Onboarding() {
       hunterPath:  skipAll ? 'hunter' : (hunterPath || 'hunter'),
       focusAreas:  skipAll ? [] : focusAreas,
       avoidances:  skipAll ? [] : avoidances,
-      gender:      skipAll ? 'prefer_not' : (gender || 'prefer_not'),
+      gender:      skipAll ? 'prefer_not' : (gender || 'prefer_not'), // constraint: male|female|nonbinary|prefer_not
     });
     setSaving(false);
   };

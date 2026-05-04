@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "state": {
+    "date": "2026-05-04",
+    "dayCount": 42,
+    "rank": "C",
+    "playerLevel": 28,
+    "stats": { "STR": 18, "AGI": 12, "VIT": 14, "INT": 8, "WIS": 10, "CHA": 6 },
+    "streak": 14,
+    "hunterPath": "hunter",
+    "gender": "he",
+    "focusAreas": ["Strength", "Endurance"],
+    "avoidances": ["Solitude"],
+    "lastSevenDays": [
+      { "date": "2026-04-27", "completed": ["Morning Vigil", "The Iron Gate", "Endurance Hold", "Focused Mind", "Cold Exposure"], "missed": [] },
+      { "date": "2026-04-28", "completed": ["Shadow Descent", "Power Base", "Recovery Walk"], "missed": [] },
+      { "date": "2026-04-29", "completed": ["Morning Vigil", "The Long Pull", "Breath Control", "Shoulder Circuit", "Grip Training"], "missed": [] },
+      { "date": "2026-04-30", "completed": ["Morning Vigil", "The Iron Gate", "Core Anchor"], "missed": ["Endurance Hold", "Focused Mind"] },
+      { "date": "2026-05-01", "completed": ["Morning Vigil", "Pressing Sequence", "Endurance Hold", "Focused Mind", "Cold Exposure"], "missed": [] },
+      { "date": "2026-05-02", "completed": ["The Crucible", "Morning Vigil", "Shoulder Circuit", "Endurance Hold", "Focused Mind"], "missed": [] },
+      { "date": "2026-05-03", "completed": ["Morning Vigil", "Power Base", "Breath Control", "Recovery Walk", "Core Anchor"], "missed": [] }
+    ],
+    "story": {
+      "currentChapter": 3,
+      "lastBeats": [
+        "The Tower does not need your leadership. It will record it anyway.",
+        "A trial appears. You complete it. Something settles into place — small, but real."
+      ]
+    },
+    "focusAreas": ["STR", "VIT"],
+    "rules": {
+      "dailyQuestCount": 5,
+      "shadowQuestEvery": 3,
+      "weeklyQuestCount": 1,
+      "minStatsCovered": 4
+    }
+  }
+}

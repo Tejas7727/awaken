@@ -1,0 +1,73 @@
+{
+  "quests": [
+    {
+      "id": "the-iron-vigil-c1",
+      "type": "daily",
+      "difficulty": "C",
+      "title": "The iron vigil",
+      "description": "The Tower asks you to hold the line. Not to advance. Simply to hold.",
+      "instruction": "Complete 3 sets of any pressing motion — stop 2 reps before failure",
+      "stats": { "STR": 14, "VIT": 6 },
+      "xp": 28,
+      "tags": ["strength", "endurance"]
+    },
+    {
+      "id": "the-long-descent",
+      "type": "daily",
+      "difficulty": "C",
+      "title": "The long descent",
+      "description": "What you build in the deep is not visible until you surface.",
+      "instruction": "40 min of Zone 2 cardio — conversational pace throughout",
+      "stats": { "VIT": 10, "AGI": 5 },
+      "xp": 30,
+      "tags": ["endurance", "cardio"]
+    },
+    {
+      "id": "anchor-the-base",
+      "type": "daily",
+      "difficulty": "B",
+      "title": "Anchor the base",
+      "description": "The Tower's foundation does not crack. Neither will yours.",
+      "instruction": "5 sets of hip hinge pattern — 8 reps, controlled eccentric",
+      "stats": { "STR": 16, "VIT": 8 },
+      "xp": 35,
+      "tags": ["strength", "posterior"]
+    },
+    {
+      "id": "cold-clarity",
+      "type": "daily",
+      "difficulty": "D",
+      "title": "Cold clarity",
+      "description": "The cold does not ask if you are ready. You enter it anyway.",
+      "instruction": "2 min cold exposure — shower or immersion, any temperature below comfort",
+      "stats": { "VIT": 8, "WIS": 5 },
+      "xp": 22,
+      "tags": ["recovery", "resilience"]
+    },
+    {
+      "id": "the-focused-interval",
+      "type": "daily",
+      "difficulty": "C",
+      "title": "The focused interval",
+      "description": "Precision is its own kind of strength. Today you train both.",
+      "instruction": "4 rounds: 30 sec max effort any movement, 90 sec full rest",
+      "stats": { "STR": 8, "AGI": 10, "VIT": 7 },
+      "xp": 29,
+      "tags": ["conditioning", "strength"]
+    },
+    {
+      "id": "the-long-haul",
+      "type": "weekly",
+      "difficulty": "C",
+      "title": "The long haul",
+      "description": "This week you do not rush. You accumulate.",
+      "instruction": "Log 4 completed training sessions this week — any modality counts",
+      "stats": { "VIT": 12, "STR": 8, "WIS": 10 },
+      "xp": 45,
+      "tags": ["consistency", "weekly"]
+    }
+  ],
+  "storyBeat": "The Tower has watched you hold the line for fourteen days. It does not say well done. It opens the next floor.",
+  "titleAward": null,
+  "whisper": null
+}

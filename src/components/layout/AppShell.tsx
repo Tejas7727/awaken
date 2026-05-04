@@ -1,14 +1,16 @@
 import type { ReactNode } from 'react';
 import { NavLink, Link } from 'react-router-dom';
 import { V } from '../../lib/voice';
+import { useStore } from '../../lib/store';
 import BottomNav from './BottomNav';
 
 const NAV_ITEMS = [
-  { to: '/',         label: V.navHome,     end: true  },
-  { to: '/quests',   label: V.navQuests,   end: false },
-  { to: '/stats',    label: V.navStats,    end: false },
-  { to: '/story',    label: V.navStory,    end: false },
-  { to: '/progress', label: V.navProgress, end: false },
+  { to: '/',         label: V.navHome,      end: true  },
+  { to: '/quests',   label: V.navQuests,    end: false },
+  { to: '/stats',    label: V.navStats,     end: false },
+  { to: '/story',    label: V.navStory,     end: false },
+  { to: '/tower',    label: V.navTower,     end: false },
+  { to: '/progress', label: V.navProgress,  end: false },
 ];
 
 interface Props {
@@ -16,6 +18,8 @@ interface Props {
 }
 
 export default function AppShell({ children }: Props) {
+  const unreadWhisperCount = useStore((s) => s.unreadWhisperCount);
+
   return (
     <div className="flex flex-col min-h-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
       <header
@@ -56,6 +60,31 @@ export default function AppShell({ children }: Props) {
         </nav>
 
         <div className="flex-1 md:hidden" />
+
+        {/* Bell icon — whispers */}
+        <Link
+          to="/whispers"
+          title={V.navWhispers}
+          aria-label={V.navWhispers}
+          className="relative flex items-center justify-center w-8 h-8 rounded-lg transition-colors hover:bg-[var(--bg-elevated)] mr-1"
+          style={{ color: 'var(--text-tertiary)' }}
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path
+              d="M8 1.33a4.67 4.67 0 0 1 4.67 4.67c0 2.57.55 4.08 1.04 5H2.29c.49-.92 1.04-2.43 1.04-5A4.67 4.67 0 0 1 8 1.33Z"
+              stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"
+            />
+            <path d="M6.33 11v.33a1.67 1.67 0 0 0 3.34 0V11" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+          {unreadWhisperCount > 0 && (
+            <span
+              className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[9px] font-bold"
+              style={{ backgroundColor: 'var(--accent-gold)', color: 'var(--text-on-gold)' }}
+            >
+              {unreadWhisperCount > 9 ? '9+' : unreadWhisperCount}
+            </span>
+          )}
+        </Link>
 
         {/* Codex icon */}
         <Link

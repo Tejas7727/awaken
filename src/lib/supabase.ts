@@ -50,6 +50,8 @@ export interface ProfileRow {
   leaderboard_optout: boolean;
   archive_gist_id: string | null;
   onboarded_at: string | null;
+  focus_areas: string[];
+  avoidances: string[];
   created_at: string;
   updated_at: string;
 }
@@ -76,6 +78,8 @@ export interface Profile {
   leaderboardOptout: boolean;
   archiveGistId: string | null;
   onboardedAt: string | null;
+  focusAreas: string[];
+  avoidances: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -102,9 +106,35 @@ export function mapProfile(row: ProfileRow): Profile {
     leaderboardOptout: row.leaderboard_optout,
     archiveGistId:     row.archive_gist_id,
     onboardedAt:       row.onboarded_at,
+    focusAreas:        row.focus_areas ?? [],
+    avoidances:        row.avoidances ?? [],
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
   };
+}
+
+// Public profile row from the public_profile denormalized table
+export interface PublicProfileRow {
+  id: string;
+  player_name: string;
+  rank: string;
+  player_level: number;
+  current_floor: number;
+  streak: number;
+  earned_title_ids: string[];
+  last_climb_at: string;
+  hunter_path: string;
+  updated_at: string;
+}
+
+// Whisper row from Supabase
+export interface WhisperRow {
+  id: string;
+  user_id: string;
+  body: string;
+  kind: 'system' | 'peer' | 'admin';
+  read_at: string | null;
+  created_at: string;
 }
 
 // Fetch the full profile row for a given user ID and map it.

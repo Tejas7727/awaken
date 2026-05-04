@@ -8,7 +8,7 @@ import { LLMQuestImport, type Quest, type QuestCompletion, type Settings, type S
 import { nanoid } from 'nanoid';
 import { TITLE_RULES } from '../data/titles';
 import { findExistingGist, createGist, updateGist, fetchGist, buildSnapshot, pushArchiveToGist, type GistSnapshot } from './github';
-import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError, fetchProfile } from './supabase';
+import { supabase, isSupabaseConfigured, playerEmail, cleanAuthError, fetchProfile, type WhisperRow, type PublicProfileRow } from './supabase';
 import { V } from './voice';
 
 const DAILY_CAP = 5;
@@ -76,6 +76,15 @@ interface AwakenState {
   authLoading: boolean;
   isLegacyUser: boolean;
   isAdmin: boolean;
+  needsOnboarding: boolean;
+  cloudProfile: import('./supabase').Profile | null;
+
+  // Whispers
+  whispers: WhisperRow[];
+  unreadWhisperCount: number;
+
+  // Tower — public profiles for leaderboard
+  publicProfiles: PublicProfileRow[];
 
   initAuth: () => Promise<void>;
   signIn: (playerName: string, password: string) => Promise<string | null>;
@@ -106,6 +115,23 @@ interface AwakenState {
   pullCheckOnLaunch: () => Promise<void>;
   applyGistSnapshot: (snapshot: GistSnapshot) => Promise<void>;
   dismissSyncBanner: () => void;
+
+  // Whispers
+  loadWhispers: () => Promise<void>;
+  markWhisperRead: (id: string) => Promise<void>;
+  subscribeWhispers: () => () => void;
+
+  // Tower
+  loadPublicProfiles: () => Promise<void>;
+  subscribeTower: () => () => void;
+
+  // Onboarding
+  completeOnboarding: (data: {
+    hunterPath: string;
+    focusAreas: string[];
+    avoidances: string[];
+    gender: string;
+  }) => Promise<void>;
 }
 
 let syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -133,6 +159,11 @@ export const useStore = create<AwakenState>((set, get) => ({
   authLoading: true,
   isLegacyUser: false,
   isAdmin: false,
+  needsOnboarding: false,
+  cloudProfile: null,
+  whispers: [],
+  unreadWhisperCount: 0,
+  publicProfiles: [],
 
   showToast: (msg) => {
     set({ toast: msg });
@@ -701,7 +732,11 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     // Fetch full profile row — select('*') so no column is ever silently skipped
     const profile = await fetchProfile(session.user.id);
-    set({ isAdmin: profile?.isAdmin ?? false });
+    set({
+      isAdmin: profile?.isAdmin ?? false,
+      needsOnboarding: profile ? !profile.onboardedAt : false,
+      cloudProfile: profile,
+    });
 
     // Seed Supabase tables (idempotent)
     seedTitlesToSupabase();
@@ -731,7 +766,7 @@ export const useStore = create<AwakenState>((set, get) => ({
 
     // Fetch full profile row — select('*') so no column is ever silently skipped
     const profile = await fetchProfile(data.user.id);
-    set({ isAdmin: profile?.isAdmin ?? false });
+    set({ isAdmin: profile?.isAdmin ?? false, cloudProfile: profile });
 
     // Seed Supabase tables (idempotent)
     seedTitlesToSupabase();
@@ -774,7 +809,7 @@ export const useStore = create<AwakenState>((set, get) => ({
     const result = rpc as { error?: string; message?: string };
     if (result?.error) return result.message ?? 'Profile creation failed';
 
-    set({ authSession: data.session });
+    set({ authSession: data.session, needsOnboarding: true });
     await seedIfEmpty();
     const row = await db.user.get('me');
     if (row) await db.user.put({ ...row, name: playerName, cloudUserId: data.user!.id });
@@ -843,6 +878,114 @@ export const useStore = create<AwakenState>((set, get) => ({
   },
 
   dismissSyncBanner: () => set({ syncBanner: null }),
+
+  // ── Whispers ──────────────────────────────────────────────────────────────
+
+  loadWhispers: async () => {
+    const { authSession } = get();
+    if (!isSupabaseConfigured || !authSession) return;
+    const { data, error } = await supabase
+      .from('whispers')
+      .select('*')
+      .eq('user_id', authSession.user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+    if (error) { console.error('[awaken] loadWhispers:', error.message); return; }
+    const rows = (data ?? []) as WhisperRow[];
+    const unread = rows.filter((w) => !w.read_at).length;
+    set({ whispers: rows, unreadWhisperCount: unread });
+  },
+
+  markWhisperRead: async (id: string) => {
+    const now = new Date().toISOString();
+    await supabase.from('whispers').update({ read_at: now }).eq('id', id);
+    set((s) => {
+      const updated = s.whispers.map((w) => w.id === id ? { ...w, read_at: now } : w);
+      return { whispers: updated, unreadWhisperCount: updated.filter((w) => !w.read_at).length };
+    });
+  },
+
+  subscribeWhispers: () => {
+    const { authSession } = get();
+    if (!isSupabaseConfigured || !authSession) return () => {};
+    const channel = supabase
+      .channel('whispers-feed')
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'whispers',
+        filter: `user_id=eq.${authSession.user.id}`,
+      }, (payload) => {
+        const newWhisper = payload.new as WhisperRow;
+        set((s) => ({
+          whispers: [newWhisper, ...s.whispers],
+          unreadWhisperCount: s.unreadWhisperCount + 1,
+        }));
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  },
+
+  // ── Tower ─────────────────────────────────────────────────────────────────
+
+  loadPublicProfiles: async () => {
+    if (!isSupabaseConfigured) return;
+    const { data, error } = await supabase
+      .from('public_profile')
+      .select('*')
+      .order('current_floor', { ascending: false });
+    if (error) { console.error('[awaken] loadPublicProfiles:', error.message); return; }
+    set({ publicProfiles: (data ?? []) as PublicProfileRow[] });
+  },
+
+  subscribeTower: () => {
+    if (!isSupabaseConfigured) return () => {};
+    const channel = supabase
+      .channel('tower-feed')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'public_profile',
+      }, (payload) => {
+        if (payload.eventType === 'DELETE') {
+          set((s) => ({ publicProfiles: s.publicProfiles.filter((p) => p.id !== (payload.old as PublicProfileRow).id) }));
+        } else {
+          const updated = payload.new as PublicProfileRow;
+          set((s) => {
+            const exists = s.publicProfiles.some((p) => p.id === updated.id);
+            return {
+              publicProfiles: exists
+                ? s.publicProfiles.map((p) => p.id === updated.id ? updated : p)
+                : [...s.publicProfiles, updated],
+            };
+          });
+        }
+      })
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  },
+
+  // ── Onboarding ────────────────────────────────────────────────────────────
+
+  completeOnboarding: async (data) => {
+    const { authSession } = get();
+    if (!isSupabaseConfigured || !authSession) return;
+    const now = new Date().toISOString();
+    const { error } = await supabase
+      .from('profiles')
+      .update({
+        hunter_path:  data.hunterPath,
+        focus_areas:  data.focusAreas,
+        avoidances:   data.avoidances,
+        gender:       data.gender,
+        onboarded_at: now,
+        updated_at:   now,
+      })
+      .eq('id', authSession.user.id);
+    if (error) { console.error('[awaken] completeOnboarding:', error.message); return; }
+    const updated = await fetchProfile(authSession.user.id);
+    set({ needsOnboarding: false, cloudProfile: updated });
+  },
 
   connectGist: async (token: string) => {
     set({ syncStatus: 'syncing' });

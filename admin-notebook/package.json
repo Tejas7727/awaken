@@ -1,0 +1,15 @@
+{
+  "name": "awaken-admin-notebook",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "node generate.mjs",
+    "push": "node push.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.105.1",
+    "dotenv": "^16.4.5",
+    "zod": "^3.23.8"
+  }
+}

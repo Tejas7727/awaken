@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useStore } from './lib/store';
@@ -8,12 +8,17 @@ import LevelUpModal from './components/LevelUpModal';
 import SyncBanner from './components/SyncBanner';
 import ColdOpen from './components/intro/ColdOpen';
 import Migrate from './pages/Migrate';
+import Onboarding from './pages/Onboarding';
 import Home from './pages/Home';
 import Quests from './pages/Quests';
 import Stats from './pages/Stats';
 import Story from './pages/Story';
-import Progress from './pages/Progress';
 import Settings from './pages/Settings';
+import Tower from './pages/Tower';
+import Whispers from './pages/Whispers';
+
+// Lazy-load recharts-heavy page to keep initial bundle under 350 KB gzipped
+const Progress = lazy(() => import('./pages/Progress'));
 
 const reducedMotion = typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -43,8 +48,10 @@ function AnimatedRoutes() {
           <Route path="/quests" element={<Quests />} />
           <Route path="/stats" element={<Stats />} />
           <Route path="/story" element={<Story />} />
-          <Route path="/progress" element={<Progress />} />
+          <Route path="/progress" element={<Suspense fallback={null}><Progress /></Suspense>} />
           <Route path="/settings" element={<Settings />} />
+          <Route path="/tower" element={<Tower />} />
+          <Route path="/whispers" element={<Whispers />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -56,6 +63,11 @@ function Dashboard() {
   const toast = useStore((s) => s.toast);
   const dismissToast = useStore((s) => s.dismissToast);
   const pushToGist = useStore((s) => s.pushToGist);
+  const loadWhispers = useStore((s) => s.loadWhispers);
+
+  useEffect(() => {
+    loadWhispers();
+  }, [loadWhispers]);
 
   useEffect(() => {
     const id = setInterval(() => { runRolloverCheck(); }, 60_000);
@@ -100,31 +112,31 @@ export default function App() {
   const authLoading = useStore((s) => s.authLoading);
   const authSession = useStore((s) => s.authSession);
   const isLegacyUser = useStore((s) => s.isLegacyUser);
+  const needsOnboarding = useStore((s) => s.needsOnboarding);
 
   useEffect(() => {
     if (isSupabaseConfigured) {
       initAuth();
     } else {
-      // Local-only mode (Supabase not configured) — skip auth gate
       init();
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // While checking session — black screen
   if (isSupabaseConfigured && authLoading) {
     return <div className="fixed inset-0" style={{ backgroundColor: '#07090E' }} />;
   }
 
-  // No session → cold open + login
   if (isSupabaseConfigured && !authSession) {
     return <ColdOpen />;
   }
 
-  // Legacy local user who needs to create a cloud account
   if (isLegacyUser) {
     return <Migrate />;
   }
 
-  // Authenticated (or Supabase not configured) → dashboard
+  if (needsOnboarding) {
+    return <Onboarding />;
+  }
+
   return <Dashboard />;
 }

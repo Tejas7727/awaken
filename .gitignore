@@ -3,3 +3,5 @@ dist
 .env.local
 .env.*.local
 .mcp.json
+admin-notebook/.env
+admin-notebook/node_modules

@@ -1,15 +1,22 @@
+import { useState } from 'react';
 import { useStore } from '../lib/store';
 import { V } from '../lib/voice';
-import { SEED_CHAPTERS } from '../data/chapters';
+import { HUNTER_CHAPTERS, VANGUARD_CHAPTERS } from '../data/chapters';
 
 export default function Story() {
   const stories = useStore((s) => s.stories);
   const user = useStore((s) => s.user);
+  const cloudProfile = useStore((s) => s.cloudProfile);
+
+  const defaultTrack = (cloudProfile?.hunterPath === 'vanguard' ? 'vanguard' : 'hunter') as 'hunter' | 'vanguard';
+  const [track, setTrack] = useState<'hunter' | 'vanguard'>(defaultTrack);
+
+  const chapters = track === 'vanguard' ? VANGUARD_CHAPTERS : HUNTER_CHAPTERS;
 
   const unlocked = stories.filter((s) => s.unlockedAt !== null);
   const locked = stories.filter((s) => s.unlockedAt === null);
 
-  const byChapter = SEED_CHAPTERS.map((ch) => ({
+  const byChapter = chapters.map((ch) => ({
     chapter: ch.chapter,
     title: ch.title,
     nodes: unlocked.filter((n) => n.chapter === ch.chapter)
@@ -21,12 +28,36 @@ export default function Story() {
 
   return (
     <div>
-      <h1
-        className="text-lg font-medium mb-1"
-        style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}
-      >
-        {V.chronicle}
-      </h1>
+      <div className="flex items-center justify-between mb-1">
+        <h1
+          className="text-lg font-medium"
+          style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)', letterSpacing: '0.04em' }}
+        >
+          {V.chronicle}
+        </h1>
+
+        {/* Track toggle */}
+        <div
+          className="flex rounded-lg overflow-hidden"
+          style={{ border: '1px solid var(--border-strong)', backgroundColor: 'var(--bg-surface)' }}
+        >
+          {(['hunter', 'vanguard'] as const).map((t) => (
+            <button
+              key={t}
+              onClick={() => setTrack(t)}
+              className="px-3 py-1 text-xs font-medium transition-colors"
+              style={{
+                backgroundColor: track === t ? 'var(--bg-elevated)' : 'transparent',
+                color: track === t ? 'var(--accent-gold)' : 'var(--text-tertiary)',
+                fontFamily: 'var(--font-body)',
+              }}
+            >
+              {t === 'hunter' ? V.chronicleHunter : V.chronicleVanguard}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <p className="text-xs mb-5" style={{ color: 'var(--text-tertiary)' }}>
         Chapter {user?.currentChapter ?? 1} · {unlocked.length} fragment{unlocked.length !== 1 ? 's' : ''} unlocked
       </p>

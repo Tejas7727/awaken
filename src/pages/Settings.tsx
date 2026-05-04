@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../lib/store';
 import { V } from '../lib/voice';
 import type { StatKey } from '../lib/schemas';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import type { ProfileRow } from '../lib/supabase';
 
 const STAT_KEYS: StatKey[] = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA'];
 
@@ -18,10 +20,46 @@ export default function Settings() {
   const showArchivePrompt = useStore((s) => s.showArchivePrompt);
   const dismissArchivePrompt = useStore((s) => s.dismissArchivePrompt);
   const authSession = useStore((s) => s.authSession);
+  const isAdmin = useStore((s) => s.isAdmin);
 
   const [confirmReset, setConfirmReset] = useState(false);
   const [showPat, setShowPat] = useState(false);
   const [patInput, setPatInput] = useState('');
+  const [hunters, setHunters] = useState<ProfileRow[]>([]);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isAdmin || !isSupabaseConfigured) return;
+    supabase.from('profiles').select('*').order('player_level', { ascending: false })
+      .then(({ data }) => { if (data) setHunters(data as ProfileRow[]); });
+  }, [isAdmin]);
+
+  const handleExportHunterContext = async (p: ProfileRow) => {
+    setExportingId(p.id);
+    const exportPack = {
+      version: '1.0',
+      state: {
+        date: new Date().toISOString().slice(0, 10),
+        rank: p.rank,
+        playerLevel: p.player_level,
+        stats: p.stats,
+        streak: p.streak,
+        hunterPath: p.hunter_path,
+        gender: p.gender,
+        focusAreas: p.focus_areas ?? [],
+        avoidances: p.avoidances ?? [],
+        lastSevenDays: [],
+        story: { currentChapter: p.current_chapter, lastBeats: [] },
+        rules: { dailyQuestCount: 5, shadowQuestEvery: 3, weeklyQuestCount: 1, minStatsCovered: 4 },
+      },
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(exportPack, null, 2));
+    } catch {
+      // Clipboard may be blocked; silently skip
+    }
+    setExportingId(null);
+  };
 
   if (!settings || !user) return null;
 
@@ -257,6 +295,47 @@ export default function Settings() {
           >
             {V.leaveTheTower}
           </button>
+        </>
+      )}
+
+      {/* Quest Master tools — admin only */}
+      {isAdmin && (
+        <>
+          <SectionHeader>Quest Master tools</SectionHeader>
+          <div className="flex flex-col gap-2 mb-5">
+            {hunters.map((p) => (
+              <div
+                key={p.id}
+                className="rounded-lg px-4 py-3 flex items-center justify-between"
+                style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}
+              >
+                <div>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>
+                    {p.player_name}
+                  </p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-tertiary)', fontFamily: 'var(--font-body)' }}>
+                    {p.rank}-rank · Lv {p.player_level} · Streak {p.streak}d
+                  </p>
+                </div>
+                <button
+                  onClick={() => handleExportHunterContext(p)}
+                  disabled={exportingId === p.id}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium"
+                  style={{
+                    backgroundColor: 'var(--bg-elevated)',
+                    color: 'var(--accent-gold)',
+                    border: '1px solid var(--border-strong)',
+                    opacity: exportingId === p.id ? 0.5 : 1,
+                  }}
+                >
+                  {exportingId === p.id ? 'Copying…' : 'Export context'}
+                </button>
+              </div>
+            ))}
+            {hunters.length === 0 && (
+              <p className="text-xs" style={{ color: 'var(--text-tertiary)' }}>No hunters found.</p>
+            )}
+          </div>
         </>
       )}
 

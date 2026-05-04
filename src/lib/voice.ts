@@ -100,4 +100,39 @@ export const V = {
 
   // Empty states
   noQuestsYet:        'No quests yet. Import a pack or add a side quest.',
+
+  // Tower
+  navTower:           'Tower',
+  towerTitle:         'The Tower',
+  towerEmptyState:    'You climb alone for now. Invite a Hunter.',
+  towerFloor:         (n: number) => `Floor ${n}`,
+  towerHunterCard:    'Hunter profile',
+
+  // Whispers
+  navWhispers:        'Whispers',
+  whispersTitle:      'Whispers',
+  whispersEmpty:      'No whispers yet. The Tower is watching.',
+  whisperKindSystem:  'Tower',
+  whisperKindPeer:    'Hunter',
+  whisperKindAdmin:   'Quest Master',
+
+  // Onboarding
+  onboardingSkip:     'Skip the ritual',
+  onboardingStep:     (n: number, total: number) => `${n} / ${total}`,
+  onboardingContinue: 'Continue',
+  onboardingBegin:    'Enter the Tower',
+  onboardingNameQ:    'What name shall the Tower record?',
+  onboardingPathQ:    'Which path calls you?',
+  onboardingPathHunterName: 'The Hunter',
+  onboardingPathHunterDesc: 'You climb for yourself. The Tower is a mirror, not a stage.',
+  onboardingPathVanguardName: 'The Vanguard',
+  onboardingPathVanguardDesc: 'You climb visibly. Your ascent gives others permission to begin.',
+  onboardingFocusQ:   'What does your body need?',
+  onboardingAvoidQ:   'What does your mind avoid?',
+  onboardingGenderQ:  'How shall the Tower address you?',
+
+  // Chronicle track switch
+  chronicleTrackLabel: 'Narrative track',
+  chronicleHunter:     'Hunter',
+  chronicleVanguard:   'Vanguard',
 } as const;

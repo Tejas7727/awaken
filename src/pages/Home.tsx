@@ -54,7 +54,7 @@ export default function Home() {
         />
       </section>
 
-      <ImportPanel />
+      {isAdmin && <ImportPanel />}
 
       {/* Rest-day button */}
       {showRestButton && !restConfirm && (

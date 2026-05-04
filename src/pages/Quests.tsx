@@ -5,6 +5,7 @@ import QuestList from '../components/quest/QuestList';
 import ImportPanel from '../components/quest/ImportPanel';
 import type { Quest, StatKey } from '../lib/schemas';
 
+
 const GROUPS: Array<{ type: Quest['type']; label: string }> = [
   { type: 'daily',  label: V.typeDaily },
   { type: 'shadow', label: V.typeShadow },
@@ -18,6 +19,7 @@ const STAT_KEYS: StatKey[] = ['STR', 'AGI', 'VIT', 'INT', 'WIS', 'CHA'];
 export default function Quests() {
   const quests = useStore((s) => s.quests);
   const addSideQuest = useStore((s) => s.addSideQuest);
+  const isAdmin = useStore((s) => s.isAdmin);
   const [showForm, setShowForm] = useState(false);
 
   return (
@@ -50,7 +52,7 @@ export default function Quests() {
         />
       )}
 
-      <ImportPanel />
+      {isAdmin && <ImportPanel />}
 
       <div className="mt-4">
         {GROUPS.map(({ type, label }) => {
